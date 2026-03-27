@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+python-multipart
+python-dotenv
+sqlalchemy
+psycopg2-binary
+pgvector
+ultralytics
+transformers
+torch
+torchvision
+Pillow
+cloudinary
+google-search-results
+numpy
