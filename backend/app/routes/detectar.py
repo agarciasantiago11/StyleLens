@@ -1,23 +1,22 @@
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, Depends
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models import Prenda
+from app.schemas import DetectarResponse, PrendaResponse
 
 router = APIRouter()
 
-MOCK_RESPONSE = {
-    "prendas": [
-        {
-            "nombre": "Sudadera Essentials",
-            "marca": "Fear of God",
-            "modelo": "FW23-ESS-001",
-            "precio": "89.99€",
-            "url_compra": "https://www.fearofgod.com/essentials",
-            "url_imagen": "https://via.placeholder.com/400x400?text=Prenda",
-            "similitud": None,
-            "fuente": "mock"
-        }
-    ]
-}
 
+@router.post("/detectar", response_model=DetectarResponse)
+async def detectar_prendas(
+    imagen: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    # Mock: devuelve las primeras 3 prendas de la BD
+    # En S3 esto se reemplaza por YOLOv8 + FashionCLIP
+    prendas = db.query(Prenda).limit(3).all()
 
-@router.post("/detectar")
-async def detectar(imagen: UploadFile = File(...)):
-    return MOCK_RESPONSE
+    return DetectarResponse(
+        prendas_detectadas=[PrendaResponse.model_validate(p) for p in prendas],
+        total=len(prendas)
+    )
