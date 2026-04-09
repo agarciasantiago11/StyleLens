@@ -1,9 +1,5 @@
 from fastapi import FastAPI
-from app.database import engine
-from app import models
 from app.routes import detectar
-
-models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="StyleLens API", version="1.0")
 
