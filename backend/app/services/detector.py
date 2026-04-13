@@ -78,12 +78,13 @@ def detectar_y_embeddings(imagen_bytes: bytes) -> list[dict]:
         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
         recorte = imagen.crop((x1, y1, x2, y2))
 
-        # Embedding FashionCLIP
+        # Embedding FashionCLIP (512 dims via visual_projection)
         inputs = clip_processor(images=recorte, return_tensors="pt")
         with torch.no_grad():
-            outputs = clip_model.vision_model(pixel_values=inputs["pixel_values"])
-            embedding = outputs.pooler_output
-            embedding = embedding / embedding.norm(dim=-1, keepdim=True)  # normalizar
+            vision_out = clip_model.vision_model(pixel_values=inputs["pixel_values"])
+            pooled = vision_out.pooler_output          # (1, 768)
+            embedding = clip_model.visual_projection(pooled)  # (1, 512)
+            embedding = embedding / embedding.norm(dim=-1, keepdim=True)
             embedding = embedding[0].tolist()
 
         detecciones.append({

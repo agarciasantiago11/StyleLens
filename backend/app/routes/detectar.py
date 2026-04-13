@@ -37,7 +37,20 @@ async def detectar_prendas(
 
         if prenda and prenda.id not in vistos:
             vistos.add(prenda.id)
-            resultados.append(PrendaResponse.model_validate(prenda))
+            prenda_dict = {
+                "id": prenda.id,
+                "nombre": prenda.nombre,
+                "categoria": prenda.categoria,
+                "color": prenda.color,
+                "marca": prenda.marca,
+                "precio": prenda.precio,
+                "tienda": prenda.tienda,
+                "imagen_url": prenda.imagen_url,
+                "bbox": det["bbox"],
+                "clase_yolo": det["clase"],
+                "confianza": round(det["confianza"], 3),
+            }
+            resultados.append(PrendaResponse(**prenda_dict))
 
     return DetectarResponse(
         prendas_detectadas=resultados,
