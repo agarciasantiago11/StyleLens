@@ -13,11 +13,16 @@ import torch
 import io
 import os
 
-# Clases COCO que pueden contener ropa (YOLO11 está entrenado en COCO)
-# 0=person es la más útil — detecta a la persona completa para recortar
-CLASES_ROPA = {0: "person", 26: "handbag", 27: "tie", 28: "suitcase"}
+# Clases DeepFashion2 — detecta prendas individuales
+CLASES_ROPA = {
+    0: "short sleeve top", 1: "long sleeve top",
+    2: "short sleeve outwear", 3: "long sleeve outwear",
+    4: "vest", 5: "sling", 6: "shorts",
+    7: "trousers", 8: "skirt", 9: "short sleeve dress",
+    10: "long sleeve dress", 11: "vest dress", 12: "sling dress"
+}
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "models", "yolo11s.pt")
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "models", "deepfashion2_yolov8s-seg.pt")
 FASHIONCLIP_MODEL = "patrickjohncyh/fashion-clip"
 
 # Carga en arranque (singleton)
