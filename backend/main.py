@@ -1,13 +1,14 @@
 from fastapi import FastAPI
-from app.routes import detectar, auth  # Esto está bien
-from app.database import engine, Base  # Esto está bien
+from app.routes import detectar, auth, buscar, prendas
+from app.database import engine, Base
 
-# Esto crea las tablas nuevas si no existen todavía
+# Crea las tablas nuevas si no existen todavía
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="StyleLens API", version="1.0")
 
 app.include_router(detectar.router, prefix="/api/v1", tags=["detectar"])
-# TU RUTA DE LOGIN (Tarea DEV-59)
+app.include_router(buscar.router, prefix="/api/v1", tags=["buscar"])
+app.include_router(prendas.router, prefix="/api/v1", tags=["prendas"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Autenticación"])
 
 

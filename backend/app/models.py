@@ -10,12 +10,15 @@ class Prenda(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
-    categoria = Column(String, nullable=False)   # camiseta, pantalon, zapatos...
+    categoria = Column(String, nullable=True)    # camiseta, pantalon, zapatos...
     color = Column(String)
     marca = Column(String)
     precio = Column(Float)
     tienda = Column(String)
-    imagen_url = Column(String)
+    imagen_url = Column(String)                  # thumbnail del resultado (SerpAPI)
+    link = Column(String)                        # link al producto en la tienda
+    imagen_hash = Column(String, index=True)     # SHA256 de la imagen subida (caché)
+    cloudinary_url = Column(String)              # URL pública en Cloudinary
     embedding = Column(Vector(512))
 
 # --- TUS TABLAS (Añade esto ahora) ---
