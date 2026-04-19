@@ -1,3 +1,4 @@
+ HEAD
 # OS
 .DS_Store
 Thumbs.db
@@ -14,3 +15,18 @@ Thumbs.db
 node_modules/
 venv/
 .env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets
+*.pem
+*.key
+ DEV-59-s3-bd-endpoints-de-login-con-contrasena
