@@ -11,3 +11,6 @@ Thumbs.db
 # Secrets
 *.pem
 *.key
+node_modules/
+venv/
+.env
