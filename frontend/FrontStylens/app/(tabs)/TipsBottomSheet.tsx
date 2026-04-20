@@ -8,6 +8,7 @@ import {
 import BottomSheet, { BottomSheetScrollView, BottomSheetBackdrop } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useAppTheme } from "@/contexts/app-theme";
 
 const TIPS = [
   {
@@ -66,6 +67,7 @@ type Props = {
 
 const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
   ({ onContinue, onBack }, ref) => {
+    const { theme } = useAppTheme();
     const bottomSheetRef = useRef<BottomSheet>(null);
     const [dontShow, setDontShow] = React.useState(false);
 
@@ -88,8 +90,8 @@ const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
         snapPoints={["92%"]}
         enablePanDownToClose
         backdropComponent={renderBackdrop}
-        handleIndicatorStyle={styles.indicator}
-        backgroundStyle={styles.sheetBackground}
+        handleIndicatorStyle={[styles.indicator, { backgroundColor: theme.border }]}
+        backgroundStyle={[styles.sheetBackground, { backgroundColor: theme.surface }]}
       >
         <BottomSheetScrollView
           contentContainerStyle={styles.scrollContent}
@@ -98,7 +100,7 @@ const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
           {/* Hero icon */}
           <View style={styles.heroIconWrapper}>
             <LinearGradient
-              colors={["#f97316", "#fbbf24"]}
+              colors={theme.gradient}
               style={styles.heroIcon}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -107,8 +109,8 @@ const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
             </LinearGradient>
           </View>
 
-          <Text style={styles.title}>Consejos para mejores resultados</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: theme.textPrimary }]}>Consejos para mejores resultados</Text>
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}> 
             Nuestro sistema usa IA avanzada (YOLOv8 + FashionCLIP) para detectar y analizar
             prendas. Sigue estas recomendaciones para resultados óptimos:
           </Text>
@@ -119,19 +121,19 @@ const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
               <View key={tip.title} style={styles.tipCard}>
                 <Ionicons name={tip.icon as any} size={20} color={tip.color} />
                 <View style={styles.tipText}>
-                  <Text style={styles.tipTitle}>{tip.title}</Text>
-                  <Text style={styles.tipDesc}>{tip.desc}</Text>
+                  <Text style={[styles.tipTitle, { color: theme.textPrimary }]}>{tip.title}</Text>
+                  <Text style={[styles.tipDesc, { color: theme.textSecondary }]}>{tip.desc}</Text>
                 </View>
               </View>
             ))}
           </View>
 
           {/* Info banner */}
-          <View style={styles.infoBanner}>
-            <Ionicons name="information-circle-outline" size={18} color="#6366f1" />
+          <View style={[styles.infoBanner, { backgroundColor: theme.accentSoft }]}> 
+            <Ionicons name="information-circle-outline" size={18} color={theme.accent} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.infoTitle}>Tecnología de detección inteligente</Text>
-              <Text style={styles.infoDesc}>
+              <Text style={[styles.infoTitle, { color: theme.textPrimary }]}>Tecnología de detección inteligente</Text>
+              <Text style={[styles.infoDesc, { color: theme.textSecondary }]}> 
                 Utilizamos YOLOv8 para detectar prendas en tiempo real y FashionCLIP para
                 clasificar tipos, colores, estilos y características específicas de cada
                 prenda de forma automática.
@@ -144,22 +146,22 @@ const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
             style={styles.checkboxRow}
             onPress={() => setDontShow(!dontShow)}
           >
-            <View style={[styles.checkbox, dontShow && styles.checkboxChecked]}>
+            <View style={[styles.checkbox, { borderColor: theme.border }, dontShow && { backgroundColor: theme.accent, borderColor: theme.accent }]}>
               {dontShow && <Ionicons name="checkmark" size={12} color="#fff" />}
             </View>
-            <Text style={styles.checkboxLabel}>No volver a mostrar estas recomendaciones</Text>
+            <Text style={[styles.checkboxLabel, { color: theme.textSecondary }]}>No volver a mostrar estas recomendaciones</Text>
           </TouchableOpacity>
 
           {/* Buttons */}
           <View style={styles.buttonsRow}>
             <TouchableOpacity
-              style={styles.secondaryButton}
+              style={[styles.secondaryButton, { borderColor: theme.border }]}
               onPress={() => {
                 bottomSheetRef.current?.close();
                 onBack();
               }}
             >
-              <Text style={styles.secondaryButtonText}>Volver</Text>
+              <Text style={[styles.secondaryButtonText, { color: theme.textPrimary }]}>Volver</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -170,7 +172,7 @@ const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
               }}
             >
               <LinearGradient
-                colors={["#a855f7", "#ec4899"]}
+                colors={theme.gradient}
                 style={styles.primaryGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
@@ -184,6 +186,8 @@ const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
     );
   }
 );
+
+TipsBottomSheet.displayName = "TipsBottomSheet";
 
 export default TipsBottomSheet;
 

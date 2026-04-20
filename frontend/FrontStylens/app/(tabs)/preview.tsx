@@ -5,7 +5,6 @@ import {
   Image,
   TouchableOpacity,
   StyleSheet,
-  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -13,10 +12,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
+import { useAppTheme } from "@/contexts/app-theme";
 
 export default function Preview() {
   const router = useRouter();
   const { uri } = useLocalSearchParams<{ uri: string }>();
+  const { theme } = useAppTheme();
 
   const handleClose = () => {
     router.back();
@@ -42,48 +43,48 @@ router.push({ pathname: "/(tabs)/preview" as any, params: { uri: result.assets[0
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" backgroundColor="#000" translucent={false} />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.headerBackground }]}>
+      <StatusBar style="light" backgroundColor={theme.headerBackground} translucent={false} />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.headerBackground, borderBottomColor: theme.border }]}> 
         <TouchableOpacity style={styles.menuButton}>
-          <Ionicons name="menu" size={24} color="#333" />
+          <Ionicons name="menu" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
 
         <View style={styles.logoContainer}>
           <LinearGradient
-            colors={["#a855f7", "#ec4899"]}
+            colors={theme.gradient}
             style={styles.logoIcon}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
             <Ionicons name="image-outline" size={20} color="#fff" />
           </LinearGradient>
-          <Text style={styles.logoText}>Stylens</Text>
+          <Text style={[styles.logoText, { color: theme.textPrimary }]}>Stylens</Text>
         </View>
 
-        <Text style={styles.version}>v1.0</Text>
+        <Text style={[styles.version, { color: theme.textMuted }]}>v1.0</Text>
       </View>
 
       {/* Content */}
-      <View style={styles.content}>
+      <View style={[styles.content, { backgroundColor: theme.appBackground }]}> 
 
         {/* Title row */}
         <View style={styles.titleRow}>
-          <Text style={styles.title}>Vista Previa</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-            <Ionicons name="close" size={16} color="#333" />
-            <Text style={styles.closeText}>Cerrar</Text>
+          <Text style={[styles.title, { color: theme.textPrimary }]}>Vista Previa</Text>
+          <TouchableOpacity style={[styles.closeButton, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={handleClose}>
+            <Ionicons name="close" size={16} color={theme.textPrimary} />
+            <Text style={[styles.closeText, { color: theme.textPrimary }]}>Cerrar</Text>
           </TouchableOpacity>
         </View>
 
         {/* Image */}
-        <View style={styles.imageCard}>
+        <View style={[styles.imageCard, { backgroundColor: theme.surface }]}> 
           {uri ? (
             <Image source={{ uri }} style={styles.image} resizeMode="cover" />
           ) : (
-            <View style={styles.imagePlaceholder}>
+            <View style={[styles.imagePlaceholder, { backgroundColor: theme.surfaceSoft }]}>
               <Ionicons name="image-outline" size={48} color="#ccc" />
             </View>
           )}
@@ -91,13 +92,13 @@ router.push({ pathname: "/(tabs)/preview" as any, params: { uri: result.assets[0
 
         {/* Buttons */}
         <View style={styles.buttonsRow}>
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleSubirOtra}>
+          <TouchableOpacity style={[styles.secondaryButton, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={handleSubirOtra}>
             <Text style={styles.secondaryButtonText}>Subir otra imagen</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.primaryButton} onPress={handleContinuar}>
             <LinearGradient
-              colors={["#a855f7", "#ec4899"]}
+              colors={theme.gradient}
               style={styles.primaryGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -108,7 +109,7 @@ router.push({ pathname: "/(tabs)/preview" as any, params: { uri: result.assets[0
         </View>
 
         {/* Footer */}
-        <Text style={styles.footer}>© 2026 Stylens - Captura tu estilo</Text>
+        <Text style={[styles.footer, { color: theme.textMuted }]}>© 2026 Stylens - Captura tu estilo</Text>
       </View>
     </SafeAreaView>
   );

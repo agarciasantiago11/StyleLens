@@ -9,7 +9,6 @@ import {
   Platform
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import Sidebar from "./Sidebar";
@@ -17,11 +16,13 @@ import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import TipsBottomSheet, { TipsBottomSheetRef } from "./TipsBottomSheet";
+import { useAppTheme } from "@/contexts/app-theme";
 
 const FORMATS = ["JPG", "PNG", "GIF", "WEBP", "HEIC"];
 
 export default function StylensScreen() {
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const { theme } = useAppTheme();
   const router = useRouter();
   const scaleCamera = useRef(new Animated.Value(1)).current;
   const scaleGallery = useRef(new Animated.Value(1)).current;
@@ -38,11 +39,19 @@ export default function StylensScreen() {
 
   const handleTakePhoto = () => {
     pendingAction.current = "camera";
+    if (Platform.OS === "web") {
+      handleContinueFromTips();
+      return;
+    }
     tipsSheetRef.current?.open();
   };
 
   const handleUploadFromGallery = () => {
     pendingAction.current = "gallery";
+    if (Platform.OS === "web") {
+      handleContinueFromTips();
+      return;
+    }
     tipsSheetRef.current?.open();
   };
 
@@ -68,39 +77,38 @@ export default function StylensScreen() {
   };
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="light" backgroundColor="#000" translucent={false} />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.headerBackground }]}>
+      <StatusBar style="light" backgroundColor={theme.headerBackground} translucent={false} />
 
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: theme.headerBackground, borderBottomColor: theme.border }]}>
           <TouchableOpacity style={styles.menuButton} onPress={() => setSidebarVisible(true)}>
-            <Ionicons name="menu" size={24} color="#333" />
+            <Ionicons name="menu" size={24} color={theme.textPrimary} />
           </TouchableOpacity>
 
           <View style={styles.logoContainer}>
             <LinearGradient
-              colors={["#a855f7", "#ec4899"]}
+              colors={theme.gradient}
               style={styles.logoIcon}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
               <Ionicons name="image-outline" size={20} color="#fff" />
             </LinearGradient>
-            <Text style={styles.logoText}>Stylens</Text>
+            <Text style={[styles.logoText, { color: theme.textPrimary }]}>Stylens</Text>
           </View>
 
-          <Text style={styles.version}>v1.0</Text>
+          <Text style={[styles.version, { color: theme.textMuted }]}>v1.0</Text>
         </View>
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          style={{ backgroundColor: "#fdf4f8" }}
+          style={{ backgroundColor: theme.appBackground }}
         >
           {/* Hero Section */}
           <View style={styles.heroSection}>
             <LinearGradient
-              colors={["#a855f7", "#ec4899"]}
+              colors={theme.gradient}
               style={styles.heroIcon}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -108,8 +116,8 @@ export default function StylensScreen() {
               <Ionicons name="camera" size={40} color="#fff" />
             </LinearGradient>
 
-            <Text style={styles.heroTitle}>Captura tu estilo</Text>
-            <Text style={styles.heroSubtitle}>
+            <Text style={[styles.heroTitle, { color: theme.textPrimary }]}>Captura tu estilo</Text>
+            <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
               Sube una foto desde tu galería o toma una nueva con tu cámara
             </Text>
           </View>
@@ -117,7 +125,7 @@ export default function StylensScreen() {
           {/* Action Cards */}
           <View style={styles.cardsRow}>
             {/* Tomar Foto */}
-            <Animated.View style={[styles.card, { transform: [{ scale: scaleCamera }] }]}>
+            <Animated.View style={[styles.card, { backgroundColor: theme.surface, transform: [{ scale: scaleCamera }] }]}>
               <TouchableOpacity
                 style={{ alignItems: "center", flex: 1, width: "100%" }}
                 onPress={handleTakePhoto}
@@ -127,16 +135,16 @@ export default function StylensScreen() {
                 onMouseLeave={() => animateOut(scaleCamera)}
                 activeOpacity={1}
               >
-                <View style={[styles.cardIconWrapper, { backgroundColor: "#ede9fe" }]}>
-                  <Ionicons name="camera" size={28} color="#7c3aed" />
+                <View style={[styles.cardIconWrapper, { backgroundColor: theme.accentSoft }]}>
+                  <Ionicons name="camera" size={28} color={theme.accent} />
                 </View>
-                <Text style={styles.cardTitle}>Tomar Foto</Text>
-                <Text style={styles.cardSubtitle}>Abre la cámara y captura una imagen</Text>
+                <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Tomar Foto</Text>
+                <Text style={[styles.cardSubtitle, { color: theme.textMuted }]}>Abre la cámara y captura una imagen</Text>
               </TouchableOpacity>
             </Animated.View>
 
             {/* Subir desde Galería */}
-            <Animated.View style={[styles.card, { transform: [{ scale: scaleGallery }] }]}>
+            <Animated.View style={[styles.card, { backgroundColor: theme.surface, transform: [{ scale: scaleGallery }] }]}>
               <TouchableOpacity
                 style={{ alignItems: "center", flex: 1, width: "100%" }}
                 onPress={handleUploadFromGallery}
@@ -146,22 +154,22 @@ export default function StylensScreen() {
                 onMouseLeave={() => animateOut(scaleGallery)}
                 activeOpacity={1}
               >
-                <View style={[styles.cardIconWrapper, { backgroundColor: "#fce7f3" }]}>
-                  <Ionicons name="arrow-up-circle" size={28} color="#db2777" />
+                <View style={[styles.cardIconWrapper, { backgroundColor: theme.accentSoft }]}>
+                  <Ionicons name="arrow-up-circle" size={28} color={theme.accent} />
                 </View>
-                <Text style={styles.cardTitle}>Subir desde Galería</Text>
-                <Text style={styles.cardSubtitle}>Selecciona una imagen de tu dispositivo</Text>
+                <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Subir desde Galería</Text>
+                <Text style={[styles.cardSubtitle, { color: theme.textMuted }]}>Selecciona una imagen de tu dispositivo</Text>
               </TouchableOpacity>
             </Animated.View>
           </View>
 
           {/* Supported Formats */}
-          <View style={styles.formatsCard}>
-            <Text style={styles.formatsTitle}>Formatos soportados</Text>
+          <View style={[styles.formatsCard, { backgroundColor: theme.surface }]}> 
+            <Text style={[styles.formatsTitle, { color: theme.textPrimary }]}>Formatos soportados</Text>
             <View style={styles.formatsRow}>
               {FORMATS.map((format) => (
-                <View key={format} style={styles.formatBadge}>
-                  <Text style={styles.formatText}>{format}</Text>
+                <View key={format} style={[styles.formatBadge, { backgroundColor: theme.surfaceSoft }]}>
+                  <Text style={[styles.formatText, { color: theme.textSecondary }]}>{format}</Text>
                 </View>
               ))}
             </View>
@@ -170,14 +178,15 @@ export default function StylensScreen() {
 
         <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
 
-        <TipsBottomSheet
-          ref={tipsSheetRef}
-          onContinue={handleContinueFromTips}
-          onBack={() => {}}
-        />
+        {Platform.OS !== "web" && (
+          <TipsBottomSheet
+            ref={tipsSheetRef}
+            onContinue={handleContinueFromTips}
+            onBack={() => {}}
+          />
+        )}
 
-      </SafeAreaView>
-    </GestureHandlerRootView>
+    </SafeAreaView>
   );
 }
 
