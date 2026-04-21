@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routes import detectar, auth, buscar, prendas
+from app.routes import detectar, auth, buscar, prendas, users  # Agregamos 'users' al final
 from app.database import engine, Base
 
 # Crea las tablas nuevas si no existen todavía
@@ -10,6 +10,7 @@ app.include_router(detectar.router, prefix="/api/v1", tags=["detectar"])
 app.include_router(buscar.router, prefix="/api/v1", tags=["buscar"])
 app.include_router(prendas.router, prefix="/api/v1", tags=["prendas"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Autenticación"])
+app.include_router(users.router)
 
 
 @app.get("/")
