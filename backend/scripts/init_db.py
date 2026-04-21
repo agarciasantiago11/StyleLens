@@ -1,24 +1,26 @@
-import bcrypt
 import sys
 
-# Función para cifrar la contraseña (Criterio de aceptación DEV-58)
-def hash_password(password: str) -> str:
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
-    return hashed.decode('utf-8')
-
 def setup_admin():
-    print("--- Inicializando Usuario Administrador ---")
+    print("--- Inicializando Usuario Administrador (Modo Passwordless - DEV-66) ---")
     email = "admin@stylelens.com"
-    raw_password = "AdminStyle2026!" # Contraseña segura para el TFG
-    hashed_pass = hash_password(raw_password)
+    nombre = "Admin StyleLens"
     
     print(f"Email: {email}")
-    print(f"Password Hash: {hashed_pass}")
-    print("\n--- COMANDO SQL PARA SUPABASE ---")
+    print(f"Nombre: {nombre}")
+    print("Nota: Ya no se genera password_hash (Sistema OTP habilitado)")
+    
+    print("\n--- COMANDO SQL PARA SUPABASE (Actualizado) ---")
     print(f"""
+    -- Insertamos el admin con password_hash como NULL para forzar el uso de OTP
     INSERT INTO public.usuarios (email, password_hash, nombre_completo, role_id, is_active)
-    VALUES ('{email}', '{hashed_pass}', 'Admin StyleLens', (SELECT id FROM roles WHERE nombre = 'Admin'), TRUE);
+    VALUES (
+        '{email}', 
+        NULL, 
+        '{nombre}', 
+        (SELECT id FROM roles WHERE nombre = 'Admin'), 
+        TRUE
+    ) ON CONFLICT (email) DO UPDATE 
+    SET password_hash = NULL; -- Si ya existía, le quitamos la contraseña antigua
     """)
 
 if __name__ == "__main__":

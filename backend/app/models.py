@@ -32,12 +32,20 @@ class Role(Base):
 class Usuario(Base):
     __tablename__ = "usuarios"
 
-    # Usamos UUID porque es lo que genera Supabase por defecto
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String, unique=True, index=True, nullable=False)
-    password_hash = Column(String, nullable=False)
+    
+    # 1. Deprecamos la contraseña (ahora puede ser nula para usuarios OTP)
+    password_hash = Column(String, nullable=True) 
+    
     nombre_completo = Column(String)
     role_id = Column(Integer, ForeignKey("roles.id"))
     is_active = Column(Boolean, default=True)
+    
+    # --- CAMPOS NUEVOS DEV-66 (OTP / Passwordless) ---
+    otp_hash = Column(String, nullable=True)
+    otp_expiration = Column(DateTime(timezone=True), nullable=True)
+    # -------------------------------------------------
+
     token = Column(String)
     token_expiration = Column(DateTime)
