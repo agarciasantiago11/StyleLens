@@ -15,14 +15,14 @@ export default function FavoritosScreen() {
       {
         id: 1,
         image: "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=400",
-        name: "Camiseta basica blanca",
+        name: "Camiseta básica blanca",
         price: "29.99 EUR",
         link: "https://example.com/product1",
       },
       {
         id: 2,
         image: "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400",
-        name: "Pantalon vaquero slim fit",
+        name: "Pantalón vaquero slim fit",
         price: "59.99 EUR",
         link: "https://example.com/product2",
       },
@@ -63,8 +63,8 @@ export default function FavoritosScreen() {
       {favorites.length === 0 ? (
         <View style={[styles.emptyCard, { backgroundColor: theme.surface }]}> 
           <Ionicons name="star-outline" size={38} color={theme.textMuted} />
-          <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>No tienes favoritos aun</Text>
-          <Text style={[styles.cardText, { color: theme.textSecondary }]}>Agrega productos a favoritos para guardarlos aqui.</Text>
+          <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>No tienes favoritos aún</Text>
+          <Text style={[styles.cardText, { color: theme.textSecondary }]}>Agrega productos a favoritos para guardarlos aquí.</Text>
           <Pressable style={[styles.primaryButton, { backgroundColor: theme.accent }]} onPress={() => router.push("/(tabs)" as any)}>
             <Text style={styles.primaryButtonText}>Buscar productos</Text>
           </Pressable>

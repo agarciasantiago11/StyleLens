@@ -16,7 +16,7 @@ export default function ContactoScreen() {
   return (
     <ScreenShell title="Contacto">
       <View style={[styles.card, { backgroundColor: theme.surface }]}> 
-        <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Informacion de contacto</Text>
+        <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Información de contacto</Text>
         <View style={styles.infoRow}>
           <Ionicons name="mail-outline" size={18} color={theme.accent} />
           <View style={styles.infoTextWrap}>
@@ -34,7 +34,7 @@ export default function ContactoScreen() {
         <View style={styles.infoRow}>
           <Ionicons name="time-outline" size={18} color={theme.accent} />
           <View style={styles.infoTextWrap}>
-            <Text style={styles.infoLabel}>Horario de atencion</Text>
+            <Text style={styles.infoLabel}>Horario de atención</Text>
             <Text style={styles.infoValue}>Lun-Vie 9:00-18:00 (GMT+1)</Text>
           </View>
         </View>
@@ -65,10 +65,10 @@ export default function ContactoScreen() {
         <View style={styles.choiceList}>
           {[
             "Selecciona un asunto",
-            "Soporte tecnico",
+            "Soporte técnico",
             "Consulta comercial",
             "Sugerencia",
-            "Colaboracion",
+            "Colaboración",
             "Otro",
           ].map((item) => (
             <Pressable
@@ -119,7 +119,7 @@ export default function ContactoScreen() {
       </View>
 
       <View style={[styles.card, { backgroundColor: theme.surface }]}> 
-        <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Siguenos en redes sociales</Text>
+        <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Síguenos en redes sociales</Text>
         <View style={styles.socialGrid}>
           {[
             { icon: "logo-instagram", name: "Instagram", color: "#db2777" },
@@ -148,7 +148,7 @@ export default function ContactoScreen() {
 
       <View style={[styles.card, { backgroundColor: theme.surface }]}> 
         <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Newsletter</Text>
-        <Text style={[styles.cardText, { color: theme.textSecondary }]}>Suscribete para recibir novedades, tips de moda y actualizaciones.</Text>
+        <Text style={[styles.cardText, { color: theme.textSecondary }]}>Suscríbete para recibir novedades, tips de moda y actualizaciones.</Text>
         <TextInput
           value={newsletterEmail}
           onChangeText={setNewsletterEmail}
@@ -162,10 +162,10 @@ export default function ContactoScreen() {
           style={[styles.secondaryBtn, { backgroundColor: theme.accent }]}
           onPress={() => {
             if (!newsletterEmail) {
-              Alert.alert("Newsletter", "Introduce un email valido");
+              Alert.alert("Newsletter", "Introduce un email válido");
               return;
             }
-            Alert.alert("Newsletter", "Suscripcion completada");
+            Alert.alert("Newsletter", "Suscripción completada");
           }}
         >
           <Text style={styles.secondaryBtnText}>Suscribirse</Text>

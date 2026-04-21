@@ -10,21 +10,21 @@ export default function CapturasScreen() {
   const { theme } = useAppTheme();
 
   return (
-    <ScreenShell title="Anteriores Capturas">
+    <ScreenShell title="Capturas anteriores">
       <View style={[styles.heroCard, { backgroundColor: theme.surface }]}>
         <View style={[styles.heroIconWrap, { backgroundColor: theme.accent }]}>
           <Ionicons name="time-outline" size={28} color="#ffffff" />
         </View>
-        <Text style={[styles.heroTitle, { color: theme.textPrimary }]}>Historial de busquedas</Text>
-        <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>Aqui veras tus capturas anteriores cuando empieces a analizar prendas.</Text>
+        <Text style={[styles.heroTitle, { color: theme.textPrimary }]}>Historial de búsquedas</Text>
+        <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>Aquí verás tus capturas anteriores cuando empieces a analizar prendas.</Text>
       </View>
 
       <View style={[styles.emptyCard, { backgroundColor: theme.surface }]}>
         <Ionicons name="images-outline" size={38} color={theme.textMuted} />
         <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>No hay capturas anteriores</Text>
-        <Text style={[styles.cardText, { color: theme.textSecondary }]}>Tu historial de busquedas aparecera aqui automaticamente.</Text>
+        <Text style={[styles.cardText, { color: theme.textSecondary }]}>Tu historial de búsquedas aparecerá aquí automáticamente.</Text>
         <Pressable style={[styles.primaryButton, { backgroundColor: theme.accent }]} onPress={() => router.push("/(tabs)" as any)}>
-          <Text style={styles.primaryButtonText}>Hacer una busqueda</Text>
+          <Text style={styles.primaryButtonText}>Hacer una búsqueda</Text>
         </Pressable>
       </View>
     </ScreenShell>

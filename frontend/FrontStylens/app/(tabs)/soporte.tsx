@@ -11,27 +11,27 @@ export default function SoporteScreen() {
   const [issueText, setIssueText] = useState("");
 
   const faqItems = [
-    "Como funciona la deteccion de prendas?",
-    "Por que no se detecta mi prenda?",
-    "Los productos son oficiales?",
-    "Puedo buscar accesorios ademas de ropa?",
-    "Los precios estan actualizados?",
-    "Funciona offline?",
+    "¿Cómo funciona la detección de prendas?",
+    "¿Por qué no se detecta mi prenda?",
+    "¿Los productos son oficiales?",
+    "¿Puedo buscar accesorios además de ropa?",
+    "¿Los precios están actualizados?",
+    "¿Funciona offline?",
   ];
 
   const tutorials = [
-    "Guia de inicio rapido",
-    "Mejores practicas de fotografia",
-    "Como usar favoritos",
+    "Guía de inicio rápido",
+    "Mejores prácticas de fotografía",
+    "Cómo usar favoritos",
     "Interpretar resultados",
   ];
 
   const issues = [
-    "La camara no funciona",
-    "Las imagenes no se suben",
+    "La cámara no funciona",
+    "Las imágenes no se suben",
     "Resultados incorrectos",
-    "Errores de conexion",
-    "Aplicacion lenta",
+    "Errores de conexión",
+    "Aplicación lenta",
   ];
 
   return (
@@ -41,7 +41,7 @@ export default function SoporteScreen() {
           <Ionicons name="headset-outline" size={24} color="#fff" />
         </View>
         <Text style={[styles.heroTitle, { color: theme.textPrimary }]}>Centro de soporte</Text>
-        <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>Como podemos ayudarte?</Text>
+        <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>¿Cómo podemos ayudarte?</Text>
       </View>
 
       <View style={[styles.searchWrap, { backgroundColor: theme.surface, borderColor: theme.border }]}> 
@@ -85,7 +85,7 @@ export default function SoporteScreen() {
       <View style={[styles.card, { backgroundColor: theme.surface }]}> 
         <View style={styles.row}>
           <Ionicons name="bulb-outline" size={20} color={theme.textPrimary} />
-          <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Tutoriales y guias</Text>
+          <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Tutoriales y guías</Text>
         </View>
         <View style={styles.listBlock}>
           {tutorials.map((t) => (
@@ -104,7 +104,7 @@ export default function SoporteScreen() {
       <View style={[styles.card, { backgroundColor: theme.surface }]}> 
         <View style={styles.row}>
           <Ionicons name="alert-circle-outline" size={20} color={theme.textPrimary} />
-          <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Solucion de problemas</Text>
+          <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Solución de problemas</Text>
         </View>
         <View style={styles.listBlock}>
           {issues.map((i) => (
@@ -120,7 +120,7 @@ export default function SoporteScreen() {
         <View style={styles.choiceList}>
           {[
             "Tipo de problema",
-            "Bug tecnico",
+            "Bug técnico",
             "Error en resultados",
             "Problema de rendimiento",
             "Otro",

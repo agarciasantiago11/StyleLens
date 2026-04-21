@@ -6,7 +6,7 @@ type ThemeId =
   | "blue-cyan"
   | "orange-red"
   | "green-emerald"
-  | "pink-purple"
+  | "salmon-fuchsia"
   | "dark";
 
 type ThemeOption = {
@@ -44,11 +44,11 @@ type AppThemeContextValue = {
 const THEME_STORAGE_KEY = "stylelens.theme.id";
 
 const THEMES: ThemeOption[] = [
-  { id: "purple-pink", name: "Purpura y Rosa", colors: ["#a855f7", "#ec4899"] },
+  { id: "purple-pink", name: "Púrpura y Rosa", colors: ["#a855f7", "#ec4899"] },
   { id: "blue-cyan", name: "Azul y Cyan", colors: ["#3b82f6", "#06b6d4"] },
   { id: "orange-red", name: "Naranja y Rojo", colors: ["#f97316", "#ef4444"] },
   { id: "green-emerald", name: "Verde y Esmeralda", colors: ["#22c55e", "#10b981"] },
-  { id: "pink-purple", name: "Rosa y Purpura", colors: ["#ec4899", "#9333ea"] },
+  { id: "salmon-fuchsia", name: "Salmón y Fucsia", colors: ["#ec4848", "#ea3373"] },
   { id: "dark", name: "Oscuro", colors: ["#475569", "#111827"] },
 ];
 

@@ -4,7 +4,6 @@ export default function TabLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
-      <Stack.Screen name="preview" />
       <Stack.Screen name="capturas" />
       <Stack.Screen name="favoritos" />
       <Stack.Screen name="configuracion" />

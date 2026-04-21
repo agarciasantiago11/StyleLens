@@ -28,7 +28,7 @@ export default function ConfiguracionScreen() {
   const [similarAlerts, setSimilarAlerts] = useState(false);
   const [promoAlerts, setPromoAlerts] = useState(false);
 
-  const [language, setLanguage] = useState("Espanol");
+  const [language, setLanguage] = useState("Español");
   const [fontSize, setFontSize] = useState("Mediano");
   const { theme, themes, selectedThemeId, setSelectedThemeId } = useAppTheme();
 
@@ -63,12 +63,12 @@ export default function ConfiguracionScreen() {
   );
 
   return (
-    <ScreenShell title="Configuracion">
+    <ScreenShell title="Configuración">
       <ScrollView contentContainerStyle={styles.stack}>
         <View style={[styles.card, { backgroundColor: theme.surface }]}> 
           <View style={styles.sectionTitleRow}>
             <Ionicons name="search" size={18} color={theme.textPrimary} />
-            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Preferencias de busqueda</Text>
+            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Preferencias de búsqueda</Text>
           </View>
           <Text style={[styles.label, { color: theme.textSecondary }]}>Rango de precios</Text>
           <View style={styles.inputRow}>
@@ -90,7 +90,7 @@ export default function ConfiguracionScreen() {
             />
           </View>
 
-          <Text style={styles.label}>Ubicacion/Pais</Text>
+          <Text style={styles.label}>Ubicación/País</Text>
           <View style={styles.choiceList}>
             {["España", "México", "Argentina", "Colombia"].map((item) => (
               <ChoiceRow
@@ -118,11 +118,11 @@ export default function ConfiguracionScreen() {
         <View style={[styles.card, { backgroundColor: theme.surface }]}> 
           <View style={styles.sectionTitleRow}>
             <Ionicons name="bulb-outline" size={18} color={theme.textPrimary} />
-            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Configuracion de IA</Text>
+            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Configuración de IA</Text>
           </View>
-          <Text style={[styles.label, { color: theme.textSecondary }]}>Sensibilidad de deteccion</Text>
+          <Text style={[styles.label, { color: theme.textSecondary }]}>Sensibilidad de detección</Text>
           <View style={styles.choiceList}>
-            {["Alta - Coincidencias exactas", "Media - Balanceado", "Baja - Mas variaciones"].map((item) => (
+            {["Alta - Coincidencias exactas", "Media - Balanceado", "Baja - Más variaciones"].map((item) => (
               <ChoiceRow
                 key={item}
                 label={item}
@@ -132,7 +132,7 @@ export default function ConfiguracionScreen() {
             ))}
           </View>
           <View style={styles.switchRow}>
-            <Text style={[styles.switchText, { color: theme.textSecondary }]}>Buscar productos similares ademas de identicos</Text>
+            <Text style={[styles.switchText, { color: theme.textSecondary }]}>Buscar productos similares además de idénticos</Text>
             <Switch value={includeSimilar} onValueChange={setIncludeSimilar} />
           </View>
         </View>
@@ -143,7 +143,7 @@ export default function ConfiguracionScreen() {
             <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Privacidad y datos</Text>
           </View>
           <View style={styles.switchRow}>
-            <Text style={[styles.switchText, { color: theme.textSecondary }]}>Guardar historial de busquedas</Text>
+            <Text style={[styles.switchText, { color: theme.textSecondary }]}>Guardar historial de búsquedas</Text>
             <Switch value={saveHistory} onValueChange={setSaveHistory} />
           </View>
           <View style={styles.switchRow}>
@@ -210,7 +210,7 @@ export default function ConfiguracionScreen() {
 
           <Text style={[styles.label, { color: theme.textSecondary }]}>Idioma</Text>
           <View style={styles.choiceList}>
-            {["Espanol", "English", "Francais"].map((item) => (
+            {["Español", "English", "Français"].map((item) => (
               <ChoiceRow
                 key={item}
                 label={item}
@@ -220,9 +220,9 @@ export default function ConfiguracionScreen() {
             ))}
           </View>
 
-          <Text style={[styles.label, { color: theme.textSecondary }]}>Tamano de fuente</Text>
+          <Text style={[styles.label, { color: theme.textSecondary }]}>Tamaño de fuente</Text>
           <View style={styles.choiceList}>
-            {["Pequeno", "Mediano", "Grande"].map((item) => (
+            {["Pequeño", "Mediano", "Grande"].map((item) => (
               <ChoiceRow
                 key={item}
                 label={item}
@@ -237,21 +237,21 @@ export default function ConfiguracionScreen() {
           <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Avanzado</Text>
           <Pressable
             style={styles.secondaryButton}
-            onPress={() => Alert.alert("Consejos", "Las recomendaciones se mostraran nuevamente.")}
+            onPress={() => Alert.alert("Consejos", "Las recomendaciones se mostrarán nuevamente.")}
           >
             <Text style={styles.secondaryButtonText}>Restablecer consejos de recomendaciones</Text>
           </Pressable>
           <Pressable
             style={styles.secondaryButton}
-            onPress={() => Alert.alert("Cache", "Cache limpiada correctamente.")}
+            onPress={() => Alert.alert("Caché", "Caché limpiada correctamente.")}
           >
-            <Text style={styles.secondaryButtonText}>Limpiar cache</Text>
+            <Text style={styles.secondaryButtonText}>Limpiar caché</Text>
           </Pressable>
         </View>
 
         <Pressable
           style={[styles.saveButton, { backgroundColor: theme.accent }]}
-          onPress={() => Alert.alert("Configuracion", "Cambios guardados.")}
+          onPress={() => Alert.alert("Configuración", "Cambios guardados.")}
         >
           <Text style={styles.saveButtonText}>Guardar cambios</Text>
         </Pressable>

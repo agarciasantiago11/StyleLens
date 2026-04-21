@@ -61,7 +61,7 @@ export type TipsBottomSheetRef = {
 };
 
 type Props = {
-  onContinue: () => void;
+  onContinue: (dontShowAgain: boolean) => void;
   onBack: () => void;
 };
 
@@ -168,7 +168,8 @@ const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
               style={styles.primaryButton}
               onPress={() => {
                 bottomSheetRef.current?.close();
-                onContinue();
+                onContinue(dontShow);
+                setDontShow(false);
               }}
             >
               <LinearGradient

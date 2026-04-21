@@ -16,7 +16,7 @@ import { useAppTheme } from "@/contexts/app-theme";
 const SIDEBAR_WIDTH = 300;
 
 const MENU_ITEMS: { icon: keyof typeof Ionicons.glyphMap; label: string; href: string }[] = [
-  { icon: "time-outline", label: "Anteriores Capturas", href: "/(tabs)/capturas" },
+  { icon: "time-outline", label: "Capturas anteriores", href: "/(tabs)/capturas" },
   { icon: "star-outline", label: "Favoritos", href: "/(tabs)/favoritos" },
   { icon: "settings-outline", label: "Configuración", href: "/(tabs)/configuracion" },
   { icon: "headset-outline", label: "Soporte", href: "/(tabs)/soporte" },
