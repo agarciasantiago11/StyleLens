@@ -9,9 +9,12 @@ import {
   TextInput,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenShell } from "@/components/screen-shell";
 import { useAppTheme } from "@/contexts/app-theme";
+
+const HIDE_TIPS_KEY = "stylelens.hide-recommendations";
 
 export default function ConfiguracionScreen() {
   const [priceMin, setPriceMin] = useState("");
@@ -31,6 +34,15 @@ export default function ConfiguracionScreen() {
   const [language, setLanguage] = useState("Español");
   const [fontSize, setFontSize] = useState("Mediano");
   const { theme, themes, selectedThemeId, setSelectedThemeId } = useAppTheme();
+
+  const handleResetRecommendationsTips = async () => {
+    try {
+      await AsyncStorage.removeItem(HIDE_TIPS_KEY);
+      Alert.alert("Consejos", "Las recomendaciones volverán a mostrarse.");
+    } catch {
+      Alert.alert("Consejos", "No se pudo restablecer esta preferencia.");
+    }
+  };
 
   const ChoiceRow = ({
     label,
@@ -237,7 +249,7 @@ export default function ConfiguracionScreen() {
           <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Avanzado</Text>
           <Pressable
             style={styles.secondaryButton}
-            onPress={() => Alert.alert("Consejos", "Las recomendaciones se mostrarán nuevamente.")}
+            onPress={handleResetRecommendationsTips}
           >
             <Text style={styles.secondaryButtonText}>Restablecer consejos de recomendaciones</Text>
           </Pressable>

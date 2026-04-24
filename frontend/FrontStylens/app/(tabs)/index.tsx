@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Sidebar from "./Sidebar";
 import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
+import { useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import TipsBottomSheet, { TipsBottomSheetRef } from "./TipsBottomSheet";
 import { useAppTheme } from "@/contexts/app-theme";
@@ -91,6 +92,14 @@ export default function StylensScreen() {
       .catch(() => setHideTips(false));
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      AsyncStorage.getItem(HIDE_TIPS_KEY)
+        .then((value) => setHideTips(value === "true"))
+        .catch(() => setHideTips(false));
+    }, [])
+  );
+
   useEffect(() => {
     return () => {
       if (loadingTimeout.current) {
@@ -109,7 +118,7 @@ export default function StylensScreen() {
 
   const handleTakePhoto = () => {
     pendingAction.current = "camera";
-    if (hideTips || Platform.OS === "web") {
+    if (hideTips) {
       handleContinueFromTips();
       return;
     }
@@ -118,7 +127,7 @@ export default function StylensScreen() {
 
   const handleUploadFromGallery = () => {
     pendingAction.current = "gallery";
-    if (hideTips || Platform.OS === "web") {
+    if (hideTips) {
       handleContinueFromTips();
       return;
     }
@@ -391,15 +400,13 @@ export default function StylensScreen() {
 
         <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
 
-      {Platform.OS !== "web" && (
-        <TipsBottomSheet
-          ref={tipsSheetRef}
-          onContinue={handleContinueFromTips}
-          onBack={() => {
-            pendingAction.current = null;
-          }}
-        />
-      )}
+      <TipsBottomSheet
+        ref={tipsSheetRef}
+        onContinue={handleContinueFromTips}
+        onBack={() => {
+          pendingAction.current = null;
+        }}
+      />
 
     </SafeAreaView>
   );
