@@ -23,6 +23,25 @@ class DetectarResponse(BaseModel):
     desde_cache: bool = False
 
 
+class BBoxResponse(BaseModel):
+    x: float
+    y: float
+    w: float
+    h: float
+
+
+class PrendaDetectadaBoxResponse(BaseModel):
+    id: int
+    clase: str
+    confianza: float
+    bbox: BBoxResponse
+
+
+class DetectarCajasResponse(BaseModel):
+    prendas_detectadas: list[PrendaDetectadaBoxResponse]
+    total: int
+
+
 class BuscarResponse(BaseModel):
     prendas: list[PrendaResponse]
     total: int
