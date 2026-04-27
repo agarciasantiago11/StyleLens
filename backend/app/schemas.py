@@ -46,3 +46,13 @@ class BuscarResponse(BaseModel):
     prendas: list[PrendaResponse]
     total: int
     desde_cache: bool
+
+
+class UserMeResponse(BaseModel):
+    id: UUID | str | int
+    email: str
+    nombre_completo: str | None = None
+    role_id: int | None = None
+    role_priority: int = 0
+
+    model_config = {"from_attributes": True}

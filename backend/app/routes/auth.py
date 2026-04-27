@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
-from app.models import Usuario
+from app.models import Usuario, Role
+from app.schemas import UserMeResponse
 from app.auth_utils import verify_password, generate_token
 from datetime import datetime, timedelta
 
@@ -40,3 +41,31 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     db.commit() 
     
     return {"access_token": token, "token_type": "bearer"}
+
+@router.get("/me", response_model=UserMeResponse)
+def me(
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+
+    token = authorization.split(" ", 1)[1].strip()
+    usuario = db.query(Usuario).filter(Usuario.token == token).first()
+
+    if not usuario or not usuario.token_expiration or usuario.token_expiration < datetime.utcnow():
+        if usuario:
+            usuario.token = None
+            usuario.token_expiration = None
+            db.commit()
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+
+    role = db.query(Role).filter(Role.id == usuario.role_id).first()
+
+    return UserMeResponse(
+        id=usuario.id,
+        email=usuario.email,
+        nombre_completo=usuario.nombre_completo,
+        role_id=usuario.role_id,
+        role_priority=role.prioridad if role else 0,
+    )
