@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // 1. Mejoramos la interfaz User para incluir la prioridad del rol (Punto 5 de la tarea)
-interface User {
+export interface User {
   id: string;
   email: string;
   nombre_completo: string;
@@ -11,7 +11,7 @@ interface User {
   role_priority: number; // Esto es clave para el AdminRoute (>= 100)
 }
 
-interface AuthState {
+export interface AuthState {
   user: User | null;
   token: string | null;
   setUser: (user: User | null) => void;

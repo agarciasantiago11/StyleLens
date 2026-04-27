@@ -7,7 +7,8 @@ import { useEffect, useState } from 'react';
 
 import { AppThemeProvider } from '@/contexts/app-theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAuthStore } from '@/store/authStore';
+import { useAuthStore, AuthState } from '@/store/authStore';
+import type { User } from '@/store/authStore';
 import apiClient from '@/api/client';
 
 export const unstable_settings = {
@@ -19,20 +20,20 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
 
-  const token = useAuthStore((state) => state.token);
-  const user = useAuthStore((state) => state.user);
-  const _hasHydrated = useAuthStore((state) => state._hasHydrated);
-  const setUser = useAuthStore((state) => state.setUser);
-  const logout = useAuthStore((state) => state.logout);
+  const token = useAuthStore((state: AuthState) => state.token);
+  const user = useAuthStore((state: AuthState) => state.user);
+  const _hasHydrated = useAuthStore((state: AuthState) => state._hasHydrated);
+  const setUser = useAuthStore((state: AuthState) => state.setUser);
+  const logout = useAuthStore((state: AuthState) => state.logout);
   const [authLoading, setAuthLoading] = useState(false);
 
-  const isSignInRoute = segments.includes('sign-in');
+  const isSignInRoute = (segments as string[]).includes('sign-in');
 
   useEffect(() => {
     if (!_hasHydrated) return;
 
     if (!token && !isSignInRoute) {
-      router.replace('/sign-in');
+      router.replace('/sign-in' as never);
       return;
     }
 
@@ -45,10 +46,10 @@ export default function RootLayout() {
       setAuthLoading(true);
       apiClient
         .get('/api/v1/auth/me')
-        .then((response) => {
+        .then((response: { data: User }) => {
           setUser(response.data);
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
           console.warn('No se pudo validar sesión:', error);
           logout();
         })

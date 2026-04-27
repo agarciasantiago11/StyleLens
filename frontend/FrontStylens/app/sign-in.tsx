@@ -12,15 +12,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useAppTheme } from "@/contexts/app-theme";
-import { useAuthStore } from "@/store/authStore";
+import { useAuthStore, AuthState } from '@/store/authStore';
 import apiClient from "@/api/client";
 import { ThemedText } from "@/components/themed-text";
-import { PublicOnlyRoute } from "@/app/lib/auth-guards";
+import { PublicOnlyRoute } from "@/lib/auth-guards";
 
 export default function SignInPage() {
   const { theme } = useAppTheme();
   const router = useRouter();
-  const { token, setToken, setUser } = useAuthStore((state) => ({
+  const { token, setToken, setUser } = useAuthStore((state: AuthState) => ({
     token: state.token,
     setToken: state.setToken,
     setUser: state.setUser,

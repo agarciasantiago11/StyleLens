@@ -51,6 +51,7 @@ class BuscarResponse(BaseModel):
 class UserMeResponse(BaseModel):
     id: UUID | str | int
     email: str
+    password_hash: str
     nombre_completo: str | None = None
     role_id: int | None = None
     role_priority: int = 0

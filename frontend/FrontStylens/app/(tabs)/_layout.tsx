@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 
-import { ProtectedRoute } from '@/app/lib/auth-guards';
+import { ProtectedRoute } from '@/lib/auth-guards';
 
 export default function TabLayout() {
   return (
