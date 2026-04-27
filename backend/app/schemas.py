@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from uuid import UUID
+from datetime import datetime
 
 
 class PrendaResponse(BaseModel):
@@ -46,3 +47,12 @@ class BuscarResponse(BaseModel):
     prendas: list[PrendaResponse]
     total: int
     desde_cache: bool
+
+
+class FavoritoResponse(BaseModel):
+    id: int
+    prenda_id: int
+    prenda: PrendaResponse
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

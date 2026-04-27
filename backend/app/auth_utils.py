@@ -1,18 +1,30 @@
 import bcrypt
-import secrets
+import os
+from datetime import datetime, timedelta, timezone
+from jose import jwt, JWTError
 
-# 1. Verificar si la contraseña coincide con el hash de la BD
+SECRET_KEY = os.getenv("SECRET_KEY", "styleLens-secret-key-change-in-prod")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_HOURS = 1
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
-        # Forzamos que el hash sea bytes y la contraseña también
-        password_bytes = plain_password.encode('utf-8')
-        hashed_bytes = hashed_password.encode('utf-8')
-        return bcrypt.checkpw(password_bytes, hashed_bytes)
+        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
     except Exception as e:
         print(f"Error en validación: {e}")
         return False
 
-# 2. Generar el Token de 64 caracteres (requisito de la tarea)
-def generate_token() -> str:
-    # Genera 32 bytes aleatorios y los convierte a hex (64 caracteres)
-    return secrets.token_hex(32)
+
+def create_access_token(user_id: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    payload = {"sub": user_id, "exp": expire}
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_token(token: str) -> str:
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    user_id: str | None = payload.get("sub")
+    if not user_id:
+        raise JWTError("Token inválido")
+    return user_id
