@@ -11,6 +11,7 @@ import {
   Platform,
   Image,
   Linking,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -31,11 +32,12 @@ const REQUEST_TIMEOUT_MS = 120000;
 const DEFAULT_TIMEOUT_MESSAGE =
   "Ups... algo salio mal, pruebe de nuevo en unos minutos.";
 
-type ScreenState = "home" | "preview" | "loading" | "results" | "error";
+type ScreenState = "home" | "preview" | "select" | "loading" | "results" | "error";
 
 type BackendPrenda = {
   id?: string | number;
   nombre?: string | null;
+  categoria?: string | null;
   precio?: number | string | null;
   imagen_url?: string | null;
   imagen?: string | null;
@@ -49,12 +51,39 @@ type DetectarApiResponse = {
   desde_cache?: boolean;
 };
 
+type BackendBBox = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+type BackendDetectedBox = {
+  id: number;
+  clase: string;
+  confianza: number;
+  bbox: BackendBBox;
+};
+
+type DetectarCajasApiResponse = {
+  prendas_detectadas?: BackendDetectedBox[];
+  total?: number;
+};
+
 type Product = {
   id: string | number;
   image: string;
   name: string;
   price: string;
   link: string;
+  category: string;
+};
+
+type SelectableBox = {
+  id: number;
+  clase: string;
+  confianza: number;
+  bbox: BackendBBox;
 };
 
 const getConfiguredApiBaseUrl = () => {
@@ -136,14 +165,59 @@ const buildImageFormData = async (selectedImageUri: string) => {
   return formData;
 };
 
-const detectWithBackend = async (selectedImageUri: string) => {
+const detectarCajasConBackend = async (selectedImageUri: string) => {
   const apiBaseCandidates = getApiBaseCandidates();
   const errors: string[] = [];
 
   for (const apiBase of apiBaseCandidates) {
     try {
       const formData = await buildImageFormData(selectedImageUri);
-      const response = await fetch(`${apiBase}/api/v1/detectar`, {
+      const response = await fetch(`${apiBase}/api/v1/detectar-cajas`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        let detail = `HTTP ${response.status}`;
+        try {
+          const body = await response.json();
+          detail = getApiErrorDetail(body) ?? detail;
+        } catch {
+          const textBody = await response.text();
+          if (textBody) detail = textBody;
+        }
+
+        errors.push(`[${apiBase}] ${detail}`);
+        continue;
+      }
+
+      const data: DetectarCajasApiResponse = await response.json();
+      return data;
+    } catch (error) {
+      errors.push(`[${apiBase}] ${toErrorMessage(error)}`);
+    }
+  }
+
+  throw new Error(errors.join(" | "));
+};
+
+const detectarPrendaSeleccionadaConBackend = async (
+  selectedImageUri: string,
+  box: SelectableBox
+) => {
+  const apiBaseCandidates = getApiBaseCandidates();
+  const errors: string[] = [];
+
+  for (const apiBase of apiBaseCandidates) {
+    try {
+      const formData = await buildImageFormData(selectedImageUri);
+      formData.append("clase", box.clase);
+      formData.append("x", String(box.bbox.x));
+      formData.append("y", String(box.bbox.y));
+      formData.append("w", String(box.bbox.w));
+      formData.append("h", String(box.bbox.h));
+
+      const response = await fetch(`${apiBase}/api/v1/detectar-prenda`, {
         method: "POST",
         body: formData,
       });
@@ -212,15 +286,34 @@ const mapBackendProducts = (items: BackendPrenda[] = []): Product[] => {
     name: item.nombre?.trim() || "Producto sin nombre",
     price: formatPrice(item.precio),
     link: item.link ?? item.url ?? "",
+    category: item.categoria?.trim() || "Sin clasificar",
   }));
 };
 
 export default function StylensScreen() {
+  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === "web" && viewportWidth >= 1024;
+  const isAndroid = Platform.OS === "android";
+
+  const selectImageHeight = isDesktopWeb
+    ? Math.min(740, Math.round(viewportHeight * 0.72))
+    : isAndroid
+      ? Math.round(viewportHeight * 0.8)
+      : Math.round(viewportHeight * 0.68);
+
+  const selectCardWidth = isDesktopWeb
+    ? Math.min(980, Math.round(viewportWidth * 0.78))
+    : Math.max(300, Math.round(viewportWidth * 0.92));
+
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [screenState, setScreenState] = useState<ScreenState>("home");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Array<string | number>>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [detectedBoxes, setDetectedBoxes] = useState<SelectableBox[]>([]);
+  const [selectedBoxId, setSelectedBoxId] = useState<number | null>(null);
+  const [previewLayout, setPreviewLayout] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [imageSize, setImageSize] = useState<{ width: number; height: number }>({ width: 1, height: 1 });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hideTips, setHideTips] = useState(false);
   const { theme } = useAppTheme();
@@ -251,6 +344,25 @@ export default function StylensScreen() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!selectedImage) {
+      setImageSize({ width: 1, height: 1 });
+      return;
+    }
+
+    Image.getSize(
+      selectedImage,
+      (width, height) => {
+        if (width > 0 && height > 0) {
+          setImageSize({ width, height });
+        }
+      },
+      () => {
+        setImageSize({ width: 1, height: 1 });
+      }
+    );
+  }, [selectedImage]);
 
   const animateIn = (anim: Animated.Value) => {
     Animated.spring(anim, { toValue: 1.07, useNativeDriver: true }).start();
@@ -311,6 +423,9 @@ export default function StylensScreen() {
   const clearImage = () => {
     setSelectedImage(null);
     setProducts([]);
+    setDetectedBoxes([]);
+    setSelectedBoxId(null);
+    setPreviewLayout({ width: 0, height: 0 });
     setErrorMessage(null);
     setScreenState("home");
     if (requestTimeout.current) {
@@ -341,7 +456,62 @@ export default function StylensScreen() {
       requestTimeout.current = timeoutId;
 
       const data = await Promise.race([
-        detectWithBackend(selectedImage),
+        detectarCajasConBackend(selectedImage),
+        timeoutPromise,
+      ]);
+
+      const boxes = data.prendas_detectadas ?? [];
+      if (boxes.length === 0) {
+        setErrorMessage("No se detectaron prendas en la imagen. Prueba con otra foto.");
+        setScreenState("error");
+        return;
+      }
+
+      setDetectedBoxes(boxes);
+      setSelectedBoxId(null);
+      setScreenState("select");
+    } catch (error) {
+      const reason = toErrorMessage(error);
+      const timeoutTriggered = reason.includes("REQUEST_TIMEOUT");
+
+      setScreenState("error");
+      setErrorMessage(
+        timeoutTriggered
+          ? DEFAULT_TIMEOUT_MESSAGE
+          : `No se pudo completar la deteccion. ${reason}`
+      );
+    } finally {
+      if (requestTimeout.current) {
+        clearTimeout(requestTimeout.current);
+        requestTimeout.current = null;
+      }
+    }
+  };
+
+  const handleDetectSelectedGarment = async (box: SelectableBox) => {
+    if (!selectedImage) {
+      setErrorMessage("No se encontro ninguna imagen para analizar.");
+      setScreenState("error");
+      return;
+    }
+
+    setSelectedBoxId(box.id);
+    setErrorMessage(null);
+    setScreenState("loading");
+
+    try {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error("REQUEST_TIMEOUT"));
+        }, REQUEST_TIMEOUT_MS);
+      });
+
+      requestTimeout.current = timeoutId;
+
+      const data = await Promise.race([
+        detectarPrendaSeleccionadaConBackend(selectedImage, box),
         timeoutPromise,
       ]);
 
@@ -375,6 +545,12 @@ export default function StylensScreen() {
     );
   };
 
+  const handleBackToSelect = () => {
+    setProducts([]);
+    setFavorites([]);
+    setScreenState("select");
+  };
+
   const handleOpenProduct = async (url: string) => {
     const canOpen = await Linking.canOpenURL(url);
     if (!canOpen) {
@@ -382,6 +558,127 @@ export default function StylensScreen() {
       return;
     }
     await Linking.openURL(url);
+  };
+
+  const getRenderedImageFrame = () => {
+    const containerWidth = previewLayout.width;
+    const containerHeight = previewLayout.height;
+    const imageWidth = imageSize.width;
+    const imageHeight = imageSize.height;
+
+    if (containerWidth <= 0 || containerHeight <= 0 || imageWidth <= 0 || imageHeight <= 0) {
+      return null;
+    }
+
+    const scale = Math.min(containerWidth / imageWidth, containerHeight / imageHeight);
+    const renderedWidth = imageWidth * scale;
+    const renderedHeight = imageHeight * scale;
+    const offsetX = (containerWidth - renderedWidth) / 2;
+    const offsetY = (containerHeight - renderedHeight) / 2;
+
+    return { offsetX, offsetY, renderedWidth, renderedHeight };
+  };
+
+  const getBoxStyle = (box: SelectableBox) => {
+    const frame = getRenderedImageFrame();
+    if (!frame) return null;
+
+    return {
+      left: frame.offsetX + box.bbox.x * frame.renderedWidth,
+      top: frame.offsetY + box.bbox.y * frame.renderedHeight,
+      width: box.bbox.w * frame.renderedWidth,
+      height: box.bbox.h * frame.renderedHeight,
+    };
+  };
+
+  const renderProductCard = (product: Product, useMobileCard = false) => {
+    const isFavorite = favorites.includes(product.id);
+
+    return (
+      <TouchableOpacity
+        key={product.id}
+        style={[
+          styles.productCard,
+          isDesktopWeb && styles.productCardDesktop,
+          useMobileCard && styles.productCardMobile,
+          { backgroundColor: theme.surface },
+        ]}
+        activeOpacity={0.88}
+        onPress={() => {
+          if (!product.link) {
+            Alert.alert("Sin enlace", "Este resultado no incluye una URL valida.");
+            return;
+          }
+          void handleOpenProduct(product.link);
+        }}
+      >
+        <View
+          style={[
+            styles.productImageWrap,
+            isDesktopWeb && styles.productImageWrapDesktop,
+            useMobileCard && styles.productImageWrapMobile,
+          ]}
+        >
+          {product.image ? (
+            <Image
+              source={{ uri: product.image }}
+              style={[styles.productImage, isDesktopWeb && styles.productImageDesktop]}
+              resizeMode="contain"
+            />
+          ) : (
+            <View style={[styles.productImage, styles.productImageFallback]}>
+              <Ionicons name="image-outline" size={34} color={theme.textMuted} />
+              <Text style={[styles.productImageFallbackText, { color: theme.textMuted }]}>Sin imagen</Text>
+            </View>
+          )}
+          {!isDesktopWeb && (
+            <LinearGradient
+              colors={["transparent", "rgba(0,0,0,0.45)"]}
+              style={styles.productImageOverlay}
+              pointerEvents="none"
+            />
+          )}
+          <TouchableOpacity
+            style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              toggleFavorite(product.id);
+            }}
+          >
+            <Ionicons
+              name={isFavorite ? "star" : "star-outline"}
+              size={15}
+              color={isFavorite ? "#f59e0b" : "#9ca3af"}
+            />
+          </TouchableOpacity>
+          <View style={styles.productPriceBadge}>
+            <Text style={styles.productPriceBadgeText} numberOfLines={1}>
+              {product.price}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.productBody}>
+          <Text style={[styles.productCategory, { color: theme.accent }]} numberOfLines={1}>
+            {product.category}
+          </Text>
+          <Text style={[styles.productName, { color: theme.textPrimary }]} numberOfLines={2}>
+            {product.name}
+          </Text>
+          <View style={styles.productFooter}>
+            <LinearGradient
+              colors={theme.gradient}
+              style={styles.productLinkButton}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Text style={styles.productLinkText}>Ver</Text>
+              <Ionicons name="arrow-forward" size={12} color="#fff" />
+            </LinearGradient>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
   };
 
   return (
@@ -521,6 +818,77 @@ export default function StylensScreen() {
           </>
         )}
 
+        {screenState === "select" && (
+          <>
+            <View style={styles.topRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Selecciona una prenda</Text>
+                <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
+                  Pulsa sobre el recuadro de la prenda que quieres buscar
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.secondaryButton, { borderColor: theme.border, backgroundColor: theme.surface }]}
+                onPress={clearImage}
+              >
+                <Ionicons name="refresh" size={14} color={theme.textPrimary} />
+                <Text style={[styles.secondaryButtonText, { color: theme.textPrimary }]}>Nueva imagen</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View
+              style={[
+                styles.selectCard,
+                isDesktopWeb && styles.selectCardDesktop,
+                !isDesktopWeb && styles.selectCardMobile,
+                {
+                  backgroundColor: theme.surface,
+                  width: selectCardWidth,
+                },
+              ]}
+              onLayout={(event) => {
+                const { width, height } = event.nativeEvent.layout;
+                setPreviewLayout({ width, height });
+              }}
+            >
+              {selectedImage ? (
+                <Image
+                  source={{ uri: selectedImage }}
+                  style={[styles.selectImage, { height: selectImageHeight }]}
+                  resizeMode="contain"
+                />
+              ) : null}
+
+              {detectedBoxes.map((box) => {
+                const boxStyle = getBoxStyle(box);
+                if (!boxStyle) return null;
+
+                const isSelected = selectedBoxId === box.id;
+                return (
+                  <TouchableOpacity
+                    key={box.id}
+                    style={[
+                      styles.detectedBox,
+                      boxStyle,
+                      isSelected && styles.detectedBoxActive,
+                    ]}
+                    onPress={() => {
+                      void handleDetectSelectedGarment(box);
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <View style={styles.detectedBoxLabelWrap}>
+                      <Text style={styles.detectedBoxLabel} numberOfLines={1}>
+                        {box.clase}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        )}
+
         {screenState === "loading" && (
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="large" color={theme.accent} />
@@ -559,90 +927,26 @@ export default function StylensScreen() {
                 <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Productos encontrados</Text>
                 <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>{products.length} prendas similares detectadas</Text>
               </View>
-              <TouchableOpacity
-                style={[styles.secondaryButton, { borderColor: theme.border, backgroundColor: theme.surface }]}
-                onPress={clearImage}
-              >
-                <Ionicons name="refresh" size={14} color={theme.textPrimary} />
-                <Text style={[styles.secondaryButtonText, { color: theme.textPrimary }]}>Nueva búsqueda</Text>
-              </TouchableOpacity>
+              <View style={styles.resultsActionsRow}>
+                <TouchableOpacity
+                  style={[styles.secondaryButton, { borderColor: theme.border, backgroundColor: theme.surface }]}
+                  onPress={handleBackToSelect}
+                >
+                  <Ionicons name="arrow-back" size={14} color={theme.textPrimary} />
+                  <Text style={[styles.secondaryButtonText, { color: theme.textPrimary }]}>Volver</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.secondaryButton, { borderColor: theme.border, backgroundColor: theme.surface }]}
+                  onPress={clearImage}
+                >
+                  <Ionicons name="refresh" size={14} color={theme.textPrimary} />
+                  <Text style={[styles.secondaryButtonText, { color: theme.textPrimary }]}>Nueva búsqueda</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
-            <View style={styles.resultsGrid}>
-              {products.map((product) => {
-                const isFavorite = favorites.includes(product.id);
-                return (
-                  <TouchableOpacity
-                    key={product.id}
-                    style={[styles.productCard, { backgroundColor: theme.surface }]}
-                    activeOpacity={0.88}
-                    onPress={() => {
-                      if (!product.link) {
-                        Alert.alert("Sin enlace", "Este resultado no incluye una URL valida.");
-                        return;
-                      }
-                      void handleOpenProduct(product.link);
-                    }}
-                  >
-                    {/* Imagen */}
-                    <View style={styles.productImageWrap}>
-                      {product.image ? (
-                        <Image source={{ uri: product.image }} style={styles.productImage} resizeMode="cover" />
-                      ) : (
-                        <View style={[styles.productImage, styles.productImageFallback]}>
-                          <Ionicons name="image-outline" size={34} color={theme.textMuted} />
-                          <Text style={[styles.productImageFallbackText, { color: theme.textMuted }]}>Sin imagen</Text>
-                        </View>
-                      )}
-                      {/* Overlay degradado inferior */}
-                      <LinearGradient
-                        colors={["transparent", "rgba(0,0,0,0.45)"]}
-                        style={styles.productImageOverlay}
-                        pointerEvents="none"
-                      />
-                      {/* Botón favorito */}
-                      <TouchableOpacity
-                        style={[
-                          styles.favoriteButton,
-                          isFavorite && styles.favoriteButtonActive,
-                        ]}
-                        onPress={(e) => {
-                          e.stopPropagation?.();
-                          toggleFavorite(product.id);
-                        }}
-                      >
-                        <Ionicons
-                          name={isFavorite ? "star" : "star-outline"}
-                          size={15}
-                          color={isFavorite ? "#f59e0b" : "#9ca3af"}
-                        />
-                      </TouchableOpacity>
-                      {/* Precio flotante sobre imagen */}
-                      <View style={styles.productPriceBadge}>
-                        <Text style={styles.productPriceBadgeText} numberOfLines={1}>{product.price}</Text>
-                      </View>
-                    </View>
-
-                    {/* Info */}
-                    <View style={styles.productBody}>
-                      <Text style={[styles.productName, { color: theme.textPrimary }]} numberOfLines={2}>
-                        {product.name}
-                      </Text>
-                      <View style={styles.productFooter}>
-                        <LinearGradient
-                          colors={theme.gradient}
-                          style={styles.productLinkButton}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                        >
-                          <Text style={styles.productLinkText}>Ver</Text>
-                          <Ionicons name="arrow-forward" size={12} color="#fff" />
-                        </LinearGradient>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+            <View style={[styles.resultsGrid, isDesktopWeb && styles.resultsGridDesktop]}>
+              {products.map((product) => renderProductCard(product, !isDesktopWeb))}
             </View>
           </>
         )}
@@ -828,6 +1132,11 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 14,
   },
+  resultsActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   sectionTitle: {
     fontSize: 22,
     fontWeight: "800",
@@ -868,6 +1177,59 @@ const styles = StyleSheet.create({
     minHeight: 280,
     alignItems: "center",
     justifyContent: "center",
+  },
+  selectCard: {
+    borderRadius: 20,
+    overflow: "hidden",
+    marginBottom: 16,
+    minHeight: 360,
+    position: "relative",
+    alignSelf: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  selectCardDesktop: {
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+  },
+  selectCardMobile: {
+    borderRadius: 18,
+  },
+  selectImage: {
+    width: "100%",
+    minHeight: 360,
+  },
+  detectedBox: {
+    position: "absolute",
+    borderWidth: 3,
+    borderColor: "#22c55e",
+    backgroundColor: "rgba(34,197,94,0.16)",
+    borderRadius: 12,
+    overflow: "hidden",
+    justifyContent: "flex-start",
+    minWidth: 44,
+    minHeight: 44,
+  },
+  detectedBoxActive: {
+    borderColor: "#f59e0b",
+    backgroundColor: "rgba(245,158,11,0.26)",
+  },
+  detectedBoxLabelWrap: {
+    backgroundColor: "rgba(0,0,0,0.72)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    alignSelf: "flex-start",
+    borderBottomRightRadius: 10,
+  },
+  detectedBoxLabel: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
   },
   previewActions: {
     flexDirection: "row",
@@ -943,6 +1305,9 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingBottom: 8,
   },
+  resultsGridDesktop: {
+    justifyContent: "flex-start",
+  },
   productCard: {
     width: "48%",
     borderRadius: 20,
@@ -953,15 +1318,36 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 5,
   },
+  productCardDesktop: {
+    width: "31%",
+    minWidth: 280,
+    maxWidth: 360,
+  },
+  productCardMobile: {
+    width: "100%",
+  },
   productImageWrap: {
     position: "relative",
     width: "100%",
     height: 210,
     backgroundColor: "#f3f4f6",
   },
+  productImageWrapDesktop: {
+    height: 260,
+    backgroundColor: "#f9fafb",
+  },
+  productImageWrapMobile: {
+    height: 235,
+  },
   productImage: {
     width: "100%",
     height: "100%",
+  },
+  productImageDesktop: {
+    width: "94%",
+    height: "94%",
+    alignSelf: "center",
+    marginTop: "3%",
   },
   productImageFallback: {
     alignItems: "center",
@@ -1023,6 +1409,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 17,
     minHeight: 34,
+  },
+  productCategory: {
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
   productFooter: {
     flexDirection: "row",
