@@ -15,9 +15,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import Constants from "expo-constants";
 import Sidebar from "./Sidebar";
 import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
+import * as ExpoLinking from "expo-linking";
 import { useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import TipsBottomSheet, { TipsBottomSheetRef } from "./TipsBottomSheet";
@@ -25,66 +27,208 @@ import { useAppTheme } from "@/contexts/app-theme";
 
 const FORMATS = ["JPG", "PNG", "GIF", "WEBP", "HEIC"];
 const HIDE_TIPS_KEY = "stylelens.hide-recommendations";
+const REQUEST_TIMEOUT_MS = 120000;
+const DEFAULT_TIMEOUT_MESSAGE =
+  "Ups... algo salio mal, pruebe de nuevo en unos minutos.";
 
-const MOCK_PRODUCTS = [
-  {
-    id: 1,
-    image: "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=400",
-    name: "Camiseta básica blanca",
-    price: "29.99 EUR",
-    link: "https://example.com/product1",
-  },
-  {
-    id: 2,
-    image: "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400",
-    name: "Pantalón vaquero slim fit",
-    price: "59.99 EUR",
-    link: "https://example.com/product2",
-  },
-  {
-    id: 3,
-    image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400",
-    name: "Sudadera con capucha gris",
-    price: "45.99 EUR",
-    link: "https://example.com/product3",
-  },
-  {
-    id: 4,
-    image: "https://images.unsplash.com/photo-1606821011768-d4c3f9e3c3e8?w=400",
-    name: "Zapatillas deportivas negras",
-    price: "89.99 EUR",
-    link: "https://example.com/product4",
-  },
-  {
-    id: 5,
-    image: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=400",
-    name: "Vestido casual verano",
-    price: "39.99 EUR",
-    link: "https://example.com/product5",
-  },
-  {
-    id: 6,
-    image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400",
-    name: "Chaqueta denim azul",
-    price: "79.99 EUR",
-    link: "https://example.com/product6",
-  },
-];
+type ScreenState = "home" | "preview" | "loading" | "results" | "error";
 
-type ScreenState = "home" | "preview" | "loading" | "results";
+type BackendPrenda = {
+  id?: string | number;
+  nombre?: string | null;
+  precio?: number | string | null;
+  imagen_url?: string | null;
+  imagen?: string | null;
+  link?: string | null;
+  url?: string | null;
+};
+
+type DetectarApiResponse = {
+  prendas_detectadas?: BackendPrenda[];
+  total?: number;
+  desde_cache?: boolean;
+};
+
+type Product = {
+  id: string | number;
+  image: string;
+  name: string;
+  price: string;
+  link: string;
+};
+
+const getConfiguredApiBaseUrl = () => {
+  const configured = process.env.EXPO_PUBLIC_API_BASE_URL;
+  if (configured && configured.trim().length > 0) {
+    return configured.trim().replace(/\/$/, "");
+  }
+
+  return null;
+};
+
+const extractHost = (value: string | null | undefined) => {
+  if (!value) return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const withoutProtocol = trimmed.replace(/^https?:\/\//, "");
+  const hostPort = withoutProtocol.split("/")[0];
+  const host = hostPort.split(":")[0];
+  return host || null;
+};
+
+const getExpoHostApiBaseUrl = () => {
+  const hostCandidates = [
+    Constants.expoConfig?.hostUri,
+    (Constants as any).expoGoConfig?.debuggerHost,
+    (Constants as any).manifest?.debuggerHost,
+    ExpoLinking.createURL("/"),
+  ];
+
+  const host = hostCandidates.map(extractHost).find((item) => Boolean(item));
+  if (!host) return null;
+  return `http://${host}:8000`;
+};
+
+const getApiBaseCandidates = () => {
+  const candidates = [
+    getConfiguredApiBaseUrl(),
+    getExpoHostApiBaseUrl(),
+    Platform.select({
+      android: "http://10.0.2.2:8000",
+      default: "http://localhost:8000",
+    }) as string,
+  ].filter((item): item is string => Boolean(item));
+
+  return [...new Set(candidates)];
+};
+
+const toErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return "Error desconocido";
+};
+
+const getApiErrorDetail = (payload: unknown) => {
+  if (!payload || typeof payload !== "object") return null;
+
+  const detail = (payload as { detail?: unknown }).detail;
+  if (typeof detail === "string") return detail;
+  return null;
+};
+
+const buildImageFormData = async (selectedImageUri: string) => {
+  const formData = new FormData();
+
+  if (Platform.OS === "web") {
+    const response = await fetch(selectedImageUri);
+    const blob = await response.blob();
+    formData.append("imagen", blob, inferFileName(selectedImageUri));
+  } else {
+    formData.append("imagen", {
+      uri: selectedImageUri,
+      name: inferFileName(selectedImageUri),
+      type: inferMimeType(selectedImageUri),
+    } as any);
+  }
+
+  return formData;
+};
+
+const detectWithBackend = async (selectedImageUri: string) => {
+  const apiBaseCandidates = getApiBaseCandidates();
+  const errors: string[] = [];
+
+  for (const apiBase of apiBaseCandidates) {
+    try {
+      const formData = await buildImageFormData(selectedImageUri);
+      const response = await fetch(`${apiBase}/api/v1/detectar`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        let detail = `HTTP ${response.status}`;
+        try {
+          const body = await response.json();
+          detail = getApiErrorDetail(body) ?? detail;
+        } catch {
+          const textBody = await response.text();
+          if (textBody) detail = textBody;
+        }
+
+        errors.push(`[${apiBase}] ${detail}`);
+        continue;
+      }
+
+      const data: DetectarApiResponse = await response.json();
+      return data;
+    } catch (error) {
+      errors.push(`[${apiBase}] ${toErrorMessage(error)}`);
+    }
+  }
+
+  throw new Error(errors.join(" | "));
+};
+
+const inferMimeType = (uri: string) => {
+  const normalized = uri.toLowerCase();
+  if (normalized.endsWith(".png")) return "image/png";
+  if (normalized.endsWith(".gif")) return "image/gif";
+  if (normalized.endsWith(".webp")) return "image/webp";
+  if (normalized.endsWith(".heic")) return "image/heic";
+  return "image/jpeg";
+};
+
+const inferFileName = (uri: string) => {
+  const cleanedUri = uri.split("?")[0];
+  const parts = cleanedUri.split("/");
+  const lastPart = parts[parts.length - 1];
+  if (lastPart && lastPart.includes(".")) return lastPart;
+  return "photo.jpg";
+};
+
+const formatPrice = (value: number | string | null | undefined) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return `${value.toFixed(2)} EUR`;
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    const numeric = Number(value.replace(",", "."));
+    if (Number.isFinite(numeric)) {
+      return `${numeric.toFixed(2)} EUR`;
+    }
+    return value;
+  }
+
+  return "Precio no disponible";
+};
+
+const mapBackendProducts = (items: BackendPrenda[] = []): Product[] => {
+  return items.map((item, index) => ({
+    id: item.id ?? index + 1,
+    image: item.imagen_url ?? item.imagen ?? "",
+    name: item.nombre?.trim() || "Producto sin nombre",
+    price: formatPrice(item.precio),
+    link: item.link ?? item.url ?? "",
+  }));
+};
 
 export default function StylensScreen() {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [screenState, setScreenState] = useState<ScreenState>("home");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [favorites, setFavorites] = useState<number[]>([]);
+  const [favorites, setFavorites] = useState<Array<string | number>>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hideTips, setHideTips] = useState(false);
   const { theme } = useAppTheme();
   const scaleCamera = useRef(new Animated.Value(1)).current;
   const scaleGallery = useRef(new Animated.Value(1)).current;
   const tipsSheetRef = useRef<TipsBottomSheetRef>(null);
   const pendingAction = useRef<"camera" | "gallery" | null>(null);
-  const loadingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(HIDE_TIPS_KEY)
@@ -102,8 +246,8 @@ export default function StylensScreen() {
 
   useEffect(() => {
     return () => {
-      if (loadingTimeout.current) {
-        clearTimeout(loadingTimeout.current);
+      if (requestTimeout.current) {
+        clearTimeout(requestTimeout.current);
       }
     };
   }, []);
@@ -166,22 +310,64 @@ export default function StylensScreen() {
 
   const clearImage = () => {
     setSelectedImage(null);
+    setProducts([]);
+    setErrorMessage(null);
     setScreenState("home");
-    if (loadingTimeout.current) {
-      clearTimeout(loadingTimeout.current);
-      loadingTimeout.current = null;
+    if (requestTimeout.current) {
+      clearTimeout(requestTimeout.current);
+      requestTimeout.current = null;
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    if (!selectedImage) {
+      setErrorMessage("No se encontro ninguna imagen para analizar.");
+      setScreenState("error");
+      return;
+    }
+
+    setErrorMessage(null);
     setScreenState("loading");
-    loadingTimeout.current = setTimeout(() => {
+
+    try {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error("REQUEST_TIMEOUT"));
+        }, REQUEST_TIMEOUT_MS);
+      });
+
+      requestTimeout.current = timeoutId;
+
+      const data = await Promise.race([
+        detectWithBackend(selectedImage),
+        timeoutPromise,
+      ]);
+
+      const mappedProducts = mapBackendProducts(data.prendas_detectadas ?? []);
+      setProducts(mappedProducts);
+      setFavorites([]);
       setScreenState("results");
-      loadingTimeout.current = null;
-    }, 5000);
+    } catch (error) {
+      const reason = toErrorMessage(error);
+      const timeoutTriggered = reason.includes("REQUEST_TIMEOUT");
+
+      setScreenState("error");
+      setErrorMessage(
+        timeoutTriggered
+          ? DEFAULT_TIMEOUT_MESSAGE
+          : `No se pudo completar la deteccion. ${reason}`
+      );
+    } finally {
+      if (requestTimeout.current) {
+        clearTimeout(requestTimeout.current);
+        requestTimeout.current = null;
+      }
+    }
   };
 
-  const toggleFavorite = (productId: number) => {
+  const toggleFavorite = (productId: string | number) => {
     setFavorites((prev) =>
       prev.includes(productId)
         ? prev.filter((id) => id !== productId)
@@ -339,7 +525,30 @@ export default function StylensScreen() {
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="large" color={theme.accent} />
             <Text style={[styles.loadingTitle, { color: theme.textPrimary }]}>Analizando tu imagen...</Text>
-            <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Estamos usando YOLOv8 y FashionCLIP para detectar y encontrar prendas similares.</Text>
+            <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Estamos usando YOLOv8 y FashionCLIP para detectar y encontrar prendas similares. Esto puede tardar hasta 2 minutos.</Text>
+          </View>
+        )}
+
+        {screenState === "error" && (
+          <View style={styles.errorWrap}>
+            <Ionicons name="alert-circle-outline" size={42} color={theme.accent} />
+            <Text style={[styles.errorTitle, { color: theme.textPrimary }]}>No se pudo completar la deteccion</Text>
+            <Text style={[styles.errorText, { color: theme.textSecondary }]}>
+              {errorMessage ?? DEFAULT_TIMEOUT_MESSAGE}
+            </Text>
+            <View style={styles.previewActions}>
+              <TouchableOpacity
+                style={[styles.secondaryAction, { borderColor: theme.border, backgroundColor: theme.surface }]}
+                onPress={clearImage}
+              >
+                <Text style={[styles.secondaryActionText, { color: theme.textPrimary }]}>Subir otra imagen</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.primaryAction} onPress={handleContinue}>
+                <LinearGradient colors={theme.gradient} style={styles.primaryActionGradient}>
+                  <Text style={styles.primaryActionText}>Reintentar</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -348,7 +557,7 @@ export default function StylensScreen() {
             <View style={styles.topRow}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Productos encontrados</Text>
-                <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>{MOCK_PRODUCTS.length} prendas similares detectadas</Text>
+                <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>{products.length} prendas similares detectadas</Text>
               </View>
               <TouchableOpacity
                 style={[styles.secondaryButton, { borderColor: theme.border, backgroundColor: theme.surface }]}
@@ -360,37 +569,78 @@ export default function StylensScreen() {
             </View>
 
             <View style={styles.resultsGrid}>
-              {MOCK_PRODUCTS.map((product) => {
+              {products.map((product) => {
                 const isFavorite = favorites.includes(product.id);
                 return (
-                  <View key={product.id} style={[styles.productCard, { backgroundColor: theme.surface }]}> 
+                  <TouchableOpacity
+                    key={product.id}
+                    style={[styles.productCard, { backgroundColor: theme.surface }]}
+                    activeOpacity={0.88}
+                    onPress={() => {
+                      if (!product.link) {
+                        Alert.alert("Sin enlace", "Este resultado no incluye una URL valida.");
+                        return;
+                      }
+                      void handleOpenProduct(product.link);
+                    }}
+                  >
+                    {/* Imagen */}
                     <View style={styles.productImageWrap}>
-                      <Image source={{ uri: product.image }} style={styles.productImage} resizeMode="cover" />
+                      {product.image ? (
+                        <Image source={{ uri: product.image }} style={styles.productImage} resizeMode="cover" />
+                      ) : (
+                        <View style={[styles.productImage, styles.productImageFallback]}>
+                          <Ionicons name="image-outline" size={34} color={theme.textMuted} />
+                          <Text style={[styles.productImageFallbackText, { color: theme.textMuted }]}>Sin imagen</Text>
+                        </View>
+                      )}
+                      {/* Overlay degradado inferior */}
+                      <LinearGradient
+                        colors={["transparent", "rgba(0,0,0,0.45)"]}
+                        style={styles.productImageOverlay}
+                        pointerEvents="none"
+                      />
+                      {/* Botón favorito */}
                       <TouchableOpacity
-                        style={styles.favoriteButton}
-                        onPress={() => toggleFavorite(product.id)}
+                        style={[
+                          styles.favoriteButton,
+                          isFavorite && styles.favoriteButtonActive,
+                        ]}
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          toggleFavorite(product.id);
+                        }}
                       >
                         <Ionicons
                           name={isFavorite ? "star" : "star-outline"}
-                          size={16}
-                          color={isFavorite ? "#f59e0b" : "#6b7280"}
+                          size={15}
+                          color={isFavorite ? "#f59e0b" : "#9ca3af"}
                         />
                       </TouchableOpacity>
+                      {/* Precio flotante sobre imagen */}
+                      <View style={styles.productPriceBadge}>
+                        <Text style={styles.productPriceBadgeText} numberOfLines={1}>{product.price}</Text>
+                      </View>
                     </View>
+
+                    {/* Info */}
                     <View style={styles.productBody}>
-                      <Text style={[styles.productName, { color: theme.textPrimary }]} numberOfLines={2}>{product.name}</Text>
-                      <Text style={[styles.productPrice, { color: theme.textSecondary }]}>{product.price}</Text>
-                      <TouchableOpacity
-                        style={styles.productLinkButton}
-                        onPress={() => handleOpenProduct(product.link)}
-                      >
-                        <LinearGradient colors={theme.gradient} style={styles.productLinkGradient}>
-                          <Text style={styles.productLinkText}>Ver producto</Text>
-                          <Ionicons name="open-outline" size={14} color="#fff" />
+                      <Text style={[styles.productName, { color: theme.textPrimary }]} numberOfLines={2}>
+                        {product.name}
+                      </Text>
+                      <View style={styles.productFooter}>
+                        <LinearGradient
+                          colors={theme.gradient}
+                          style={styles.productLinkButton}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                        >
+                          <Text style={styles.productLinkText}>Ver</Text>
+                          <Ionicons name="arrow-forward" size={12} color="#fff" />
                         </LinearGradient>
-                      </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -668,72 +918,128 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     maxWidth: 340,
   },
+  errorWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 56,
+    gap: 12,
+  },
+  errorTitle: {
+    fontSize: 21,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  errorText: {
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+    maxWidth: 340,
+    marginBottom: 8,
+  },
   resultsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    gap: 10,
+    gap: 14,
     paddingBottom: 8,
   },
   productCard: {
     width: "48%",
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowColor: "#a855f7",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    elevation: 5,
   },
   productImageWrap: {
     position: "relative",
     width: "100%",
-    height: 180,
+    height: 210,
     backgroundColor: "#f3f4f6",
   },
   productImage: {
     width: "100%",
     height: "100%",
   },
+  productImageFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#f3f4f6",
+  },
+  productImageFallbackText: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  productImageOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+  },
+  productPriceBadge: {
+    position: "absolute",
+    bottom: 8,
+    left: 8,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    maxWidth: "80%",
+  },
+  productPriceBadgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
   favoriteButton: {
     position: "absolute",
     top: 8,
     right: 8,
-    width: 30,
-    height: 30,
+    width: 32,
+    height: 32,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.92)",
+    backgroundColor: "rgba(255,255,255,0.95)",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  favoriteButtonActive: {
+    backgroundColor: "#fffbeb",
   },
   productBody: {
     padding: 10,
     gap: 6,
   },
   productName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
+    lineHeight: 17,
     minHeight: 34,
   },
-  productPrice: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  productLinkButton: {
-    borderRadius: 10,
-    overflow: "hidden",
-    marginTop: 4,
-  },
-  productLinkGradient: {
+  productFooter: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
+    justifyContent: "flex-end",
+  },
+  productLinkButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   productLinkText: {
     color: "#fff",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
   },
 });

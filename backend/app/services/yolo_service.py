@@ -3,18 +3,40 @@ import io
 from PIL import Image
 from ultralytics import YOLO
 
-# Ruta al modelo DeepFashion2 (segmentación de prendas)
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "../../models/deepfashion2_yolov8s-seg.pt")
-MODEL_PATH = os.path.abspath(MODEL_PATH)
+DEFAULT_CUSTOM_MODEL_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "../../models/deepfashion2_yolov8s-seg.pt")
+)
+DEFAULT_FALLBACK_MODEL = "yolov8n.pt"
+
+
+def _resolve_model_source() -> str:
+    """
+    Prioridad de carga del modelo:
+    1) YOLO_MODEL_PATH (si existe)
+    2) backend/models/deepfashion2_yolov8s-seg.pt (si existe)
+    3) modelo fallback de Ultralytics (descarga automatica si aplica)
+    """
+    env_model_path = os.getenv("YOLO_MODEL_PATH")
+    if env_model_path:
+        env_model_path = os.path.abspath(env_model_path)
+        if os.path.exists(env_model_path):
+            return env_model_path
+
+    if os.path.exists(DEFAULT_CUSTOM_MODEL_PATH):
+        return DEFAULT_CUSTOM_MODEL_PATH
+
+    return os.getenv("YOLO_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL)
 
 _model = None
+_model_source = None
 
 
 def _get_model() -> YOLO:
     """Carga el modelo una sola vez (singleton)."""
-    global _model
+    global _model, _model_source
     if _model is None:
-        _model = YOLO(MODEL_PATH)
+        _model_source = _resolve_model_source()
+        _model = YOLO(_model_source)
     return _model
 
 

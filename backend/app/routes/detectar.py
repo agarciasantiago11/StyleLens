@@ -1,4 +1,5 @@
 import hashlib
+import logging
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -7,6 +8,7 @@ from app.schemas import DetectarResponse, PrendaResponse
 from app.services import cloudinary_service, serpapi_service, yolo_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/detectar", response_model=DetectarResponse)
@@ -32,7 +34,8 @@ async def detectar_prendas(
     try:
         recortes = yolo_service.detectar_y_recortar(imagen_bytes)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en detección YOLO: {str(e)}")
+        logger.warning("Fallo en deteccion YOLO, se usa fallback de imagen completa: %s", str(e))
+        recortes = []
 
     # Si YOLO no detecta nada, usar la imagen completa como fallback
     if not recortes:
