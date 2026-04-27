@@ -6,22 +6,22 @@ import {
   StyleSheet,
   Modal,
   Animated,
-  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { useAppTheme } from "@/contexts/app-theme";
 
 const SIDEBAR_WIDTH = 300;
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-const MENU_ITEMS: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
-  { icon: "time-outline", label: "Anteriores Capturas" },
-  { icon: "star-outline", label: "Favoritos" },
-  { icon: "settings-outline", label: "Configuración" },
-  { icon: "headset-outline", label: "Soporte" },
-  { icon: "mail-outline", label: "Contacto" },
-  { icon: "information-circle-outline", label: "Acerca de" },
+const MENU_ITEMS: { icon: keyof typeof Ionicons.glyphMap; label: string; href: string }[] = [
+  { icon: "time-outline", label: "Capturas anteriores", href: "/(tabs)/capturas" },
+  { icon: "star-outline", label: "Favoritos", href: "/(tabs)/favoritos" },
+  { icon: "settings-outline", label: "Configuración", href: "/(tabs)/configuracion" },
+  { icon: "headset-outline", label: "Soporte", href: "/(tabs)/soporte" },
+  { icon: "mail-outline", label: "Contacto", href: "/(tabs)/contacto" },
+  { icon: "information-circle-outline", label: "Acerca de", href: "/(tabs)/acerca" },
 ];
 
 export default function Sidebar({
@@ -31,6 +31,8 @@ export default function Sidebar({
   visible: boolean;
   onClose: () => void;
 }) {
+  const router = useRouter();
+  const { theme } = useAppTheme();
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
 
   useEffect(() => {
@@ -48,7 +50,7 @@ export default function Sidebar({
       useNativeDriver: true,
     }).start();
   }
-}, [visible]);
+}, [slideAnim, visible]);
 
   return (
     <Modal visible={visible} animationType="none" transparent>
@@ -58,13 +60,16 @@ export default function Sidebar({
 
         {/* Sidebar animado desde la izquierda */}
         <Animated.View
-          style={[styles.sidebar, { transform: [{ translateX: slideAnim }] }]}
+          style={[
+            styles.sidebar,
+            { backgroundColor: theme.surface, transform: [{ translateX: slideAnim }] },
+          ]}
         >
           <SafeAreaView style={{ flex: 1 }}>
             {/* Header */}
             <View style={styles.header}>
               <LinearGradient
-                colors={["#a855f7", "#ec4899"]}
+                colors={theme.gradient}
                 style={styles.logoIcon}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -72,27 +77,34 @@ export default function Sidebar({
                 <Ionicons name="image-outline" size={20} color="#fff" />
               </LinearGradient>
               <View>
-                <Text style={styles.logoTitle}>Stylens</Text>
-                <Text style={styles.logoSubtitle}>Menú de navegación</Text>
+                <Text style={[styles.logoTitle, { color: theme.textPrimary }]}>Stylens</Text>
+                <Text style={[styles.logoSubtitle, { color: theme.textMuted }]}>Menú de navegación</Text>
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
             {/* Menu Items */}
             <View style={styles.menuList}>
               {MENU_ITEMS.map((item) => (
-                <TouchableOpacity key={item.label} style={styles.menuItem}>
-                  <Ionicons name={item.icon} size={22} color="#555" />
-                  <Text style={styles.menuLabel}>{item.label}</Text>
+                <TouchableOpacity
+                  key={item.label}
+                  style={styles.menuItem}
+                  onPress={() => {
+                    onClose();
+                    router.push(item.href as any);
+                  }}
+                >
+                  <Ionicons name={item.icon} size={22} color={theme.textSecondary} />
+                  <Text style={[styles.menuLabel, { color: theme.textPrimary }]}>{item.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
             {/* Footer */}
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Versión 1.0.0</Text>
-              <Text style={styles.footerText}>© 2026 Stylens</Text>
+              <Text style={[styles.footerText, { color: theme.textMuted }]}>Versión 1.0.0</Text>
+              <Text style={[styles.footerText, { color: theme.textMuted }]}>© 2026 Stylens</Text>
             </View>
           </SafeAreaView>
         </Animated.View>

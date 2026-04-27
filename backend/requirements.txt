@@ -13,3 +13,4 @@ Pillow
 cloudinary
 google-search-results
 numpy
+bcrypt

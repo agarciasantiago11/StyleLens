@@ -11,7 +11,6 @@ def setup_admin():
     print("--- Inicializando Usuario Administrador ---")
     email = "admin@stylelens.com"
     raw_password = "AdminStyle2026!" # Contraseña segura para el TFG
-    
     hashed_pass = hash_password(raw_password)
     
     print(f"Email: {email}")

@@ -1,9 +1,10 @@
 from pydantic import BaseModel
 from typing import Optional
+from uuid import UUID
 
 
 class PrendaResponse(BaseModel):
-    id: int
+    id: UUID | str | int
     nombre: str
     categoria: Optional[str] = None
     color: Optional[str] = None
@@ -20,6 +21,25 @@ class DetectarResponse(BaseModel):
     prendas_detectadas: list[PrendaResponse]
     total: int
     desde_cache: bool = False
+
+
+class BBoxResponse(BaseModel):
+    x: float
+    y: float
+    w: float
+    h: float
+
+
+class PrendaDetectadaBoxResponse(BaseModel):
+    id: int
+    clase: str
+    confianza: float
+    bbox: BBoxResponse
+
+
+class DetectarCajasResponse(BaseModel):
+    prendas_detectadas: list[PrendaDetectadaBoxResponse]
+    total: int
 
 
 class BuscarResponse(BaseModel):
