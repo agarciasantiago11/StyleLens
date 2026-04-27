@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   TextInput,
@@ -20,22 +20,14 @@ import { PublicOnlyRoute } from "@/lib/auth-guards";
 export default function SignInPage() {
   const { theme } = useAppTheme();
   const router = useRouter();
-  const { token, setToken, setUser } = useAuthStore((state: AuthState) => ({
-    token: state.token,
-    setToken: state.setToken,
-    setUser: state.setUser,
-  }));
+  const token = useAuthStore((state: AuthState) => state.token);
+  const setToken = useAuthStore((state: AuthState) => state.setToken);
+  const setUser = useAuthStore((state: AuthState) => state.setUser);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-
-  useEffect(() => {
-    if (token) {
-      router.replace("/");
-    }
-  }, [token, router]);
 
   const toErrorMessage = (error: unknown) => {
     if (typeof error === "string") return error;

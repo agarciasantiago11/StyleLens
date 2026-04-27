@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -17,8 +17,6 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const router = useRouter();
-  const segments = useSegments();
 
   const token = useAuthStore((state: AuthState) => state.token);
   const user = useAuthStore((state: AuthState) => state.user);
@@ -27,20 +25,8 @@ export default function RootLayout() {
   const logout = useAuthStore((state: AuthState) => state.logout);
   const [authLoading, setAuthLoading] = useState(false);
 
-  const isSignInRoute = (segments as string[]).includes('sign-in');
-
   useEffect(() => {
     if (!_hasHydrated) return;
-
-    if (!token && !isSignInRoute) {
-      router.replace('/sign-in' as never);
-      return;
-    }
-
-    if (token && isSignInRoute) {
-      router.replace('/');
-      return;
-    }
 
     if (token && !user && !authLoading) {
       setAuthLoading(true);
@@ -57,7 +43,7 @@ export default function RootLayout() {
           setAuthLoading(false);
         });
     }
-  }, [_hasHydrated, token, user, isSignInRoute, router, setUser, logout, authLoading]);
+  }, [_hasHydrated, token, user, setUser, logout, authLoading]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

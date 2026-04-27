@@ -1,6 +1,14 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const hasWindow = typeof globalThis !== 'undefined' && typeof (globalThis as { window?: unknown }).window !== 'undefined';
+
+const noopStorage: StateStorage = {
+  getItem: async () => null,
+  setItem: async () => {},
+  removeItem: async () => {},
+};
 
 // 1. Mejoramos la interfaz User para incluir la prioridad del rol (Punto 5 de la tarea)
 export interface User {
@@ -27,7 +35,8 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       token: null,
-      _hasHydrated: false, // Control de carga inicial
+      // En web cliente no bloqueamos el primer render esperando rehidratación.
+      _hasHydrated: hasWindow, // Control de carga inicial
 
       setUser: (user) => set({ user }),
       setToken: (token) => set({ token }),
@@ -40,9 +49,13 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => (hasWindow ? AsyncStorage : noopStorage)),
       // Esto asegura que la app espere a leer el disco antes de decidir si hay sesión
-      onRehydrateStorage: () => (state) => {
+      onRehydrateStorage: () => (state, error) => {
+        // En web puede fallar la lectura del storage; no dejamos la UI bloqueada en blanco.
+        if (error) {
+          console.warn('Error rehidratando auth-storage:', error);
+        }
         state?.setHasHydrated(true);
       },
     }

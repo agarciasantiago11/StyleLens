@@ -1,65 +1,54 @@
-import { useEffect } from "react";
-import { useRouter } from "expo-router";
-import { useAuthStore } from "@/store/authStore";
+import { Redirect } from "expo-router";
+import { ActivityIndicator, View } from "react-native";
+import { useAuthStore, type AuthState } from "@/store/authStore";
+
+function AuthLoadingScreen() {
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <ActivityIndicator size="large" />
+    </View>
+  );
+}
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const token = useAuthStore((state) => state.token);
-  const _hasHydrated = useAuthStore((state) => state._hasHydrated);
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!_hasHydrated) return;
-    if (!token) {
-      router.replace("/sign-in");
-    }
-  }, [_hasHydrated, router, token]);
+  const token = useAuthStore((state: AuthState) => state.token);
+  const _hasHydrated = useAuthStore((state: AuthState) => state._hasHydrated);
 
   if (!_hasHydrated || !token) {
-    return null;
+    if (!_hasHydrated) return <AuthLoadingScreen />;
+    return <Redirect href="/sign-in" />;
   }
 
   return <>{children}</>;
 }
 
 export function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
-  const token = useAuthStore((state) => state.token);
-  const _hasHydrated = useAuthStore((state) => state._hasHydrated);
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!_hasHydrated) return;
-    if (token) {
-      router.replace("/");
-    }
-  }, [_hasHydrated, router, token]);
+  const token = useAuthStore((state: AuthState) => state.token);
+  const _hasHydrated = useAuthStore((state: AuthState) => state._hasHydrated);
 
   if (!_hasHydrated || token) {
-    return null;
+    if (!_hasHydrated) return <AuthLoadingScreen />;
+    return <Redirect href="/" />;
   }
 
   return <>{children}</>;
 }
 
 export function AdminRoute({ children }: { children: React.ReactNode }) {
-  const token = useAuthStore((state) => state.token);
-  const user = useAuthStore((state) => state.user);
-  const _hasHydrated = useAuthStore((state) => state._hasHydrated);
-  const router = useRouter();
+  const token = useAuthStore((state: AuthState) => state.token);
+  const user = useAuthStore((state: AuthState) => state.user);
+  const _hasHydrated = useAuthStore((state: AuthState) => state._hasHydrated);
 
-  useEffect(() => {
-    if (!_hasHydrated) return;
-    if (!token || !user) {
-      router.replace("/sign-in");
-      return;
-    }
+  if (!_hasHydrated) {
+    return <AuthLoadingScreen />;
+  }
 
-    if (user.role_priority < 100) {
-      router.replace("/");
-    }
-  }, [_hasHydrated, router, token, user]);
+  if (!token || !user) {
+    return <Redirect href="/sign-in" />;
+  }
 
-  if (!_hasHydrated || !token || !user || user.role_priority < 100) {
-    return null;
+  if (user.role_priority < 100) {
+    return <Redirect href="/" />;
   }
 
   return <>{children}</>;
