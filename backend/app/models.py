@@ -1,8 +1,10 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime
-from sqlalchemy.dialects.postgresql import UUID  # Importante para que funcione con Supabase
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
 from app.database import Base
-import uuid # Necesario para generar los IDs por defecto
+from datetime import datetime
+import uuid
 
 
 class Prenda(Base):
@@ -41,3 +43,14 @@ class Usuario(Base):
     is_active = Column(Boolean, default=True)
     token = Column(String)
     token_expiration = Column(DateTime)
+
+
+class Favorito(Base):
+    __tablename__ = "favoritos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"), nullable=False)
+    prenda_id = Column(Integer, ForeignKey("prendas.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    prenda = relationship("Prenda")

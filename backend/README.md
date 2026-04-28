@@ -106,7 +106,7 @@ Las tablas se crean automáticamente al arrancar la API.
 ## 6. Arrancar la API
 
 ```bash
-uvicorn main:app --reload
+ uvicorn main:app --host 0.0.0.0 --port 8000 --reload   
 ```
 
 La API estará disponible en `http://localhost:8000`.
