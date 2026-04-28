@@ -9,38 +9,26 @@ from datetime import datetime, timedelta
 
 router = APIRouter()
 
+
 class LoginRequest(BaseModel):
     email: str
     password: str
 
+
 @router.post("/login")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
-    # 1. Buscar al usuario
     usuario = db.query(Usuario).filter(Usuario.email == request.email).first()
-    
-    # --- BLOQUE DE DEBUG ---
-    if not usuario:
-        print(f"DEBUG: El email '{request.email}' NO existe en la base de datos.")
-    else:
-        print(f"DEBUG: Usuario encontrado. Comparando contraseñas...")
-        # Esto nos dirá si verify_password devuelve True o False
-        es_valida = verify_password(request.password, usuario.password_hash)
-        print(f"DEBUG: ¿La contraseña coincide?: {es_valida}")
-    # -----------------------
 
-    # 2. Validar
-    # Volvemos a la lógica normal, pero ahora sabrás qué falló mirando la terminal
     if not usuario or not verify_password(request.password, usuario.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
-    
-    # 3. Crear sesión
+
     token = generate_token()
     usuario.token = token
     usuario.token_expiration = datetime.utcnow() + timedelta(hours=1)
-    
-    db.commit() 
-    
+    db.commit()
+
     return {"access_token": token, "token_type": "bearer"}
+
 
 @router.get("/me", response_model=UserMeResponse)
 def me(
@@ -69,3 +57,22 @@ def me(
         role_id=usuario.role_id,
         role_priority=role.prioridad if role else 0,
     )
+
+
+@router.post("/logout")
+def logout(
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+
+    token = authorization.split(" ", 1)[1].strip()
+    usuario = db.query(Usuario).filter(Usuario.token == token).first()
+
+    if usuario:
+        usuario.token = None
+        usuario.token_expiration = None
+        db.commit()
+
+    return {"message": "Sesión cerrada correctamente"}

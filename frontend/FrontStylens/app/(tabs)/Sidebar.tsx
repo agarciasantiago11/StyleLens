@@ -12,6 +12,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useAppTheme } from "@/contexts/app-theme";
+import { useAuthStore } from "@/store/authStore";
+import apiClient from "@/api/client";
 
 const SIDEBAR_WIDTH = 300;
 
@@ -33,6 +35,18 @@ export default function Sidebar({
 }) {
   const router = useRouter();
   const { theme } = useAppTheme();
+  const logout = useAuthStore((state) => state.logout);
+
+  const handleLogout = async () => {
+    try {
+      await apiClient.post("/api/v1/auth/logout");
+    } catch {
+      // Si falla la llamada al servidor igualmente limpiamos la sesión local
+    }
+    logout();
+    onClose();
+    router.replace("/sign-in");
+  };
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
 
   useEffect(() => {
@@ -99,6 +113,17 @@ export default function Sidebar({
                   <Text style={[styles.menuLabel, { color: theme.textPrimary }]}>{item.label}</Text>
                 </TouchableOpacity>
               ))}
+            </View>
+
+            {/* Logout */}
+            <View style={styles.logoutContainer}>
+              <TouchableOpacity
+                style={[styles.logoutButton, { borderColor: "#ef4444" }]}
+                onPress={handleLogout}
+              >
+                <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+                <Text style={styles.logoutText}>Cerrar sesión</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Footer */}
@@ -179,6 +204,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#333",
     fontWeight: "500",
+  },
+  logoutContainer: {
+    position: "absolute",
+    bottom: 88,
+    width: "100%",
+    paddingHorizontal: 16,
+  },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  logoutText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#ef4444",
   },
   footer: {
     position: "absolute",
