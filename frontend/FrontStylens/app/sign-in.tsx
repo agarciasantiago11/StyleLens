@@ -20,7 +20,6 @@ import { PublicOnlyRoute } from "@/lib/auth-guards";
 export default function SignInPage() {
   const { theme } = useAppTheme();
   const router = useRouter();
-  const token = useAuthStore((state: AuthState) => state.token);
   const setToken = useAuthStore((state: AuthState) => state.setToken);
   const setUser = useAuthStore((state: AuthState) => state.setUser);
 
@@ -68,7 +67,7 @@ export default function SignInPage() {
 
   return (
     <PublicOnlyRoute>
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.appBackground }]}> 
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.appBackground }]}>
         <KeyboardAvoidingView
           style={styles.container}
           behavior={Platform.select({ ios: "padding", android: undefined })}
