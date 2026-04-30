@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -18,7 +20,7 @@ def get_favoritos(
 
 @router.post("/favoritos/{prenda_id}", response_model=FavoritoResponse, status_code=201)
 def add_favorito(
-    prenda_id: int,
+    prenda_id: UUID,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
@@ -42,7 +44,7 @@ def add_favorito(
 
 @router.delete("/favoritos/{prenda_id}", status_code=204)
 def remove_favorito(
-    prenda_id: int,
+    prenda_id: UUID,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):

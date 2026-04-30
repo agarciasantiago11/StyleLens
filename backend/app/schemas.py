@@ -5,15 +5,18 @@ from datetime import datetime
 
 
 class PrendaResponse(BaseModel):
-    id: UUID | str | int
+    id: UUID | str
     nombre: str
     categoria: Optional[str] = None
+    subcategoria: Optional[str] = None
     color: Optional[str] = None
     marca: Optional[str] = None
     precio: Optional[float] = None
+    precio_actual: Optional[float] = None
     tienda: Optional[str] = None
     imagen_url: Optional[str] = None
     link: Optional[str] = None
+    fuente_precio: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -50,8 +53,7 @@ class BuscarResponse(BaseModel):
 
 
 class FavoritoResponse(BaseModel):
-    id: int
-    prenda_id: int
+    prenda_id: UUID | str
     prenda: PrendaResponse
     created_at: datetime
 

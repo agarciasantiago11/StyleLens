@@ -10,18 +10,21 @@ import uuid
 class Prenda(Base):
     __tablename__ = "prendas"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     nombre = Column(String, nullable=False)
-    categoria = Column(String, nullable=True)    # camiseta, pantalon, zapatos...
+    categoria = Column(String, nullable=True)    # camiseta, pantalon, otros
+    subcategoria = Column(String, nullable=True) # short sleeve top, skirt, long sleeve dress, etc.
     color = Column(String)
     marca = Column(String)
     precio = Column(Float)
+    precio_actual = Column(Float, nullable=True)
     tienda = Column(String)
     imagen_url = Column(String)                  # thumbnail del resultado (SerpAPI)
     link = Column(String)                        # link al producto en la tienda
     imagen_hash = Column(String, index=True)     # SHA256 de la imagen subida (caché)
     cloudinary_url = Column(String)              # URL pública en Cloudinary
     embedding = Column(Vector(512))
+    fuente_precio = Column(String, nullable=True)
 
 # --- TUS TABLAS (Añade esto ahora) ---
 
@@ -48,9 +51,8 @@ class Usuario(Base):
 class Favorito(Base):
     __tablename__ = "favoritos"
 
-    id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"), nullable=False)
-    prenda_id = Column(Integer, ForeignKey("prendas.id"), nullable=False)
+    usuario_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"), primary_key=True, nullable=False)
+    prenda_id = Column(UUID(as_uuid=True), ForeignKey("prendas.id"), primary_key=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     prenda = relationship("Prenda")

@@ -19,13 +19,16 @@ from app.database import engine
 SQL_STATEMENTS = [
     "CREATE EXTENSION IF NOT EXISTS vector",
     "ALTER TABLE public.prendas ADD COLUMN IF NOT EXISTS categoria TEXT",
+    "ALTER TABLE public.prendas ADD COLUMN IF NOT EXISTS subcategoria TEXT",
     "ALTER TABLE public.prendas ADD COLUMN IF NOT EXISTS color TEXT",
     "ALTER TABLE public.prendas ADD COLUMN IF NOT EXISTS precio DOUBLE PRECISION",
+    "ALTER TABLE public.prendas ADD COLUMN IF NOT EXISTS precio_actual DECIMAL(10, 2)",
     "ALTER TABLE public.prendas ADD COLUMN IF NOT EXISTS tienda TEXT",
     "ALTER TABLE public.prendas ADD COLUMN IF NOT EXISTS link TEXT",
     "ALTER TABLE public.prendas ADD COLUMN IF NOT EXISTS imagen_hash TEXT",
     "ALTER TABLE public.prendas ADD COLUMN IF NOT EXISTS cloudinary_url TEXT",
     "ALTER TABLE public.prendas ADD COLUMN IF NOT EXISTS embedding vector(512)",
+    "ALTER TABLE public.prendas ADD COLUMN IF NOT EXISTS fuente_precio TEXT",
     "CREATE INDEX IF NOT EXISTS ix_prendas_imagen_hash ON public.prendas (imagen_hash)",
     # Migracion de datos de columnas legacy si existen.
     """

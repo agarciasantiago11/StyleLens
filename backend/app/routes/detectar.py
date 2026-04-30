@@ -11,6 +11,36 @@ from app.schemas import (
 )
 from app.services import cloudinary_service, serpapi_service, yolo_service
 
+CATEGORIA_MAP = {
+    "short sleeve top": "camiseta",
+    "long sleeve top": "camiseta",
+    "vest": "camiseta",
+    "sling": "camiseta",
+    "shorts": "pantalon",
+    "trousers": "pantalon",
+    "skirt": "otros",
+    "short sleeve dress": "otros",
+    "long sleeve dress": "otros",
+    "vest dress": "otros",
+    "sling dress": "otros",
+    "short sleeve outwear": "otros",
+    "long sleeve outwear": "otros",
+}
+
+
+def _map_categoria(clase: str) -> str:
+    if clase is None:
+        return "otros"
+    nombre = clase.strip().lower().replace("_", " ")
+    return CATEGORIA_MAP.get(nombre, "otros")
+
+
+def _map_subcategoria(clase: str) -> str:
+    if clase is None:
+        return "otros"
+    return clase.strip().lower().replace("_", " ")
+
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -36,7 +66,8 @@ def _guardar_resultados_en_bd(
     for r in resultados:
         prenda = Prenda(
             nombre=r["nombre"],
-            categoria=clase,
+            categoria=_map_categoria(clase),
+            subcategoria=_map_subcategoria(clase),
             tienda=r["tienda"],
             precio=r["precio"],
             imagen_url=r["imagen_url"],

@@ -1,5 +1,5 @@
 -- 1. EXTENSIÓN VECTORIAL (pgvector)
-CREATE EXTENSION IF NOT EXISTS vector SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS vector;
  
 -- ============================================================
 -- 2. ROLES (DEV-58)
@@ -39,11 +39,22 @@ CREATE TABLE IF NOT EXISTS public.usuarios (
 CREATE TABLE IF NOT EXISTS public.prendas (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nombre        TEXT NOT NULL,
+    categoria     TEXT,
+    subcategoria  TEXT,
+    color         TEXT,
     marca         TEXT,
+    precio        DOUBLE PRECISION,
     precio_actual DECIMAL(10, 2),
+    tienda        TEXT,
     imagen_url    TEXT,
+    link          TEXT,
+    imagen_hash   TEXT,
+    cloudinary_url TEXT,
+    embedding     vector(512),
     fuente_precio TEXT
 );
+
+CREATE INDEX IF NOT EXISTS ix_prendas_imagen_hash ON public.prendas (imagen_hash);
  
 -- ============================================================
 -- 5. FAVORITOS Y BÚSQUEDAS
@@ -84,13 +95,6 @@ CREATE TABLE IF NOT EXISTS public.pantalones (
     embedding       extensions.vector(512),
     color           TEXT,
     corte           TEXT
-);
- 
-CREATE TABLE IF NOT EXISTS public.calzado (
-    prenda_id       UUID PRIMARY KEY REFERENCES public.prendas(id) ON DELETE CASCADE,
-    embedding       extensions.vector(512),
-    tipo_suela      TEXT,
-    color           TEXT
 );
  
 CREATE TABLE IF NOT EXISTS public.otros (
