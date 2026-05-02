@@ -25,6 +25,7 @@ export default function RootLayout() {
   const logout = useAuthStore((state: AuthState) => state.logout);
   const [authLoading, setAuthLoading] = useState(false);
 
+  // Validate stored token on startup
   useEffect(() => {
     if (!_hasHydrated) return;
 
