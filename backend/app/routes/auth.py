@@ -5,9 +5,21 @@ from app.database import get_db
 from app.models import Usuario, Role
 from app.schemas import UserMeResponse
 from app.auth_utils import verify_password, generate_token
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 router = APIRouter()
+
+
+def _is_token_expired(token_expiration: datetime | None) -> bool:
+    if not token_expiration:
+        return True
+
+    # Normaliza datetimes naive como UTC para evitar errores aware vs naive.
+    exp = token_expiration
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+
+    return exp < datetime.now(timezone.utc)
 
 
 class LoginRequest(BaseModel):
@@ -24,7 +36,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 
     token = generate_token()
     usuario.token = token
-    usuario.token_expiration = datetime.utcnow() + timedelta(hours=1)
+    usuario.token_expiration = datetime.now(timezone.utc) + timedelta(hours=1)
     db.commit()
 
     return {"access_token": token, "token_type": "bearer"}
@@ -41,7 +53,7 @@ def me(
     token = authorization.split(" ", 1)[1].strip()
     usuario = db.query(Usuario).filter(Usuario.token == token).first()
 
-    if not usuario or not usuario.token_expiration or usuario.token_expiration < datetime.utcnow():
+    if not usuario or _is_token_expired(usuario.token_expiration):
         if usuario:
             usuario.token = None
             usuario.token_expiration = None

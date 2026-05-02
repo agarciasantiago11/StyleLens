@@ -16,13 +16,21 @@ import { useAuthStore, AuthState } from '@/store/authStore';
 import apiClient from "@/api/client";
 import { ThemedText } from "@/components/themed-text";
 import { PublicOnlyRoute } from "@/lib/auth-guards";
+import { SignInBackgroundCarousel } from "@/components/sign-in-background-carousel";
+import { SIGN_IN_CAROUSEL_IMAGES } from "@/constants/sign-in-carousel-images";
 
 export default function SignInPage() {
   const { theme } = useAppTheme();
   const router = useRouter();
-  const token = useAuthStore((state: AuthState) => state.token);
   const setToken = useAuthStore((state: AuthState) => state.setToken);
   const setUser = useAuthStore((state: AuthState) => state.setUser);
+  const heroColors = theme.gradient;
+  const inputSurface = "rgba(255,255,255,0.50)";
+  const inputBorder = "rgba(255,255,255,0.60)";
+  const headingColor = "#22181f";
+  const bodyColor = "rgba(44,31,41,0.9)";
+  const labelColor = "rgba(34,24,31,0.92)";
+  const mutedColor = "rgba(73,54,68,0.62)";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -50,9 +58,16 @@ export default function SignInPage() {
         password,
       });
 
-      setToken(response.data.access_token);
+      const accessToken: string = response.data.access_token;
 
-      const profileResponse = await apiClient.get("/api/v1/auth/me");
+      // Validamos el token recibido antes de persistir sesión global y redirigir.
+      const profileResponse = await apiClient.get("/api/v1/auth/me", {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      setToken(accessToken);
       setUser(profileResponse.data);
       router.replace("/");
     } catch (error: unknown) {
@@ -69,12 +84,13 @@ export default function SignInPage() {
   return (
     <PublicOnlyRoute>
       <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.appBackground }]}> 
+        <SignInBackgroundCarousel images={SIGN_IN_CAROUSEL_IMAGES} />
         <KeyboardAvoidingView
           style={styles.container}
           behavior={Platform.select({ ios: "padding", android: undefined })}
         >
           <LinearGradient
-            colors={theme.gradient}
+            colors={heroColors}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.hero}
@@ -87,21 +103,30 @@ export default function SignInPage() {
             </ThemedText>
           </LinearGradient>
 
-          <View style={[styles.box, { backgroundColor: theme.surface, borderColor: theme.border }]}> 
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Inicio de sesión
-            </ThemedText>
-            <ThemedText style={[styles.sectionSubtitle, { color: theme.textSecondary }]}> 
-              Accede con tu correo y contraseña para continuar.
-            </ThemedText>
-
-            <View style={[styles.inputGroup, { backgroundColor: theme.surfaceSoft, borderColor: theme.border }]}> 
-              <ThemedText style={styles.inputLabel}>Correo electrónico</ThemedText>
+          <View
+            style={[
+              styles.box,
+              {
+                backgroundColor: "transparent",
+                borderColor: "transparent",
+              },
+            ]}
+          > 
+            <View
+              style={[
+                styles.inputGroup,
+                {
+                  backgroundColor: inputSurface,
+                  borderColor: inputBorder,
+                },
+              ]}
+            > 
+              <ThemedText style={[styles.inputLabel, { color: labelColor }]}>Correo electrónico</ThemedText>
               <TextInput
-                style={[styles.input, { color: theme.textPrimary }]}
+                style={[styles.input, { color: headingColor }]}
                 value={email}
                 placeholder="usuario@ejemplo.com"
-                placeholderTextColor={theme.textMuted}
+                placeholderTextColor={mutedColor}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 textContentType="username"
@@ -109,13 +134,21 @@ export default function SignInPage() {
               />
             </View>
 
-            <View style={[styles.inputGroup, { backgroundColor: theme.surfaceSoft, borderColor: theme.border }]}> 
-              <ThemedText style={styles.inputLabel}>Contraseña</ThemedText>
+            <View
+              style={[
+                styles.inputGroup,
+                {
+                  backgroundColor: inputSurface,
+                  borderColor: inputBorder,
+                },
+              ]}
+            > 
+              <ThemedText style={[styles.inputLabel, { color: labelColor }]}>Contraseña</ThemedText>
               <TextInput
-                style={[styles.input, { color: theme.textPrimary }]}
+                style={[styles.input, { color: headingColor }]}
                 value={password}
                 placeholder="••••••••"
-                placeholderTextColor={theme.textMuted}
+                placeholderTextColor={mutedColor}
                 secureTextEntry
                 textContentType="password"
                 onChangeText={setPassword}
@@ -157,48 +190,68 @@ const styles = StyleSheet.create({
   hero: {
     padding: 28,
     paddingTop: 56,
+    marginTop: 12,
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
   },
   heroTitle: {
     color: "#fff",
     marginBottom: 8,
+    textShadowColor: "rgba(0,0,0,0.25)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 12,
   },
   heroSubtitle: {
     color: "rgba(255,255,255,0.9)",
     maxWidth: 260,
+    textShadowColor: "rgba(0,0,0,0.22)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 10,
   },
   box: {
     margin: 16,
     marginTop: -48,
     borderRadius: 24,
     padding: 24,
+    borderWidth: 1,
+    overflow: "hidden",
     shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   sectionTitle: {
     marginBottom: 6,
+    textShadowColor: "rgba(255,255,255,0.16)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
   sectionSubtitle: {
     marginBottom: 24,
+    textShadowColor: "rgba(255,255,255,0.14)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
   inputGroup: {
     borderWidth: 1,
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 16,
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 12,
   },
   inputLabel: {
-    marginBottom: 10,
-    fontSize: 14,
+    marginBottom: 6,
+    fontSize: 13,
     fontWeight: "600",
   },
   input: {
-    fontSize: 16,
-    minHeight: 44,
+    fontSize: 15,
+    minHeight: 36,
     padding: 0,
   },
   errorText: {

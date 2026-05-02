@@ -16,7 +16,7 @@ export function ScreenShell({ title, children }: ScreenShellProps) {
   const { theme } = useAppTheme();
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.headerBackground }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.appBackground }]}>
       <View style={[styles.header, { backgroundColor: theme.headerBackground, borderBottomColor: theme.border }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.push("/(tabs)" as any)}>
           <Ionicons name="arrow-back" size={22} color={theme.textPrimary} />

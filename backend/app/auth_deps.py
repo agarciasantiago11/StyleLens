@@ -1,8 +1,19 @@
 from fastapi import Depends, HTTPException, Header
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database import get_db
 from app.models import Usuario, Role
+
+
+def _is_token_expired(token_expiration: datetime | None) -> bool:
+    if not token_expiration:
+        return True
+
+    exp = token_expiration
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+
+    return exp < datetime.now(timezone.utc)
 
 
 def get_current_user(
@@ -15,7 +26,7 @@ def get_current_user(
     token = authorization.split(" ", 1)[1].strip()
     usuario = db.query(Usuario).filter(Usuario.token == token).first()
 
-    if not usuario or not usuario.token_expiration or usuario.token_expiration < datetime.utcnow():
+    if not usuario or _is_token_expired(usuario.token_expiration):
         if usuario:
             usuario.token = None
             usuario.token_expiration = None

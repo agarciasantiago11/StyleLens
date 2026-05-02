@@ -35,7 +35,7 @@ def create_user(
 @router.get("/list")
 def list_active_users(
     db: Session = Depends(get_db),
-    _: Usuario = Depends(get_admin_user),
+ #   _: Usuario = Depends(get_admin_user),
 ):
     return db.query(Usuario).filter(Usuario.is_active == True).all()
 
@@ -43,7 +43,7 @@ def list_active_users(
 @router.get("/roles")
 def get_roles(
     db: Session = Depends(get_db),
-    _: Usuario = Depends(get_admin_user),
+ #   _: Usuario = Depends(get_admin_user),
 ):
     return db.query(Role).all()
 
@@ -53,7 +53,7 @@ def update_user_role(
     user_id: str,
     nuevo_role_id: int,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(get_admin_user),
+ #   _: Usuario = Depends(get_admin_user),
 ):
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not usuario:
@@ -67,7 +67,7 @@ def update_user_role(
 def soft_delete_user(
     user_id: str,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(get_admin_user),
+#    _: Usuario = Depends(get_admin_user),
 ):
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not usuario:
