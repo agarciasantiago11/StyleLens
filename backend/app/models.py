@@ -12,8 +12,8 @@ class Prenda(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     nombre = Column(String, nullable=False)
-    categoria = Column(String, nullable=True)    # camiseta, pantalon, otros
-    subcategoria = Column(String, nullable=True) # short sleeve top, skirt, long sleeve dress, etc.
+    categoria = Column(String, nullable=True)    # prendas_superiores | prendas_inferiores | cuerpo_entero
+    subcategoria = Column(String, nullable=True) # camisetas | chaquetas_y_abrigos | pantalones | shorts | faldas | vestidos
     color = Column(String)
     marca = Column(String)
     precio = Column(Float)

@@ -11,34 +11,30 @@ from app.schemas import (
 )
 from app.services import cloudinary_service, serpapi_service, yolo_service
 
-CATEGORIA_MAP = {
-    "short sleeve top": "camiseta",
-    "long sleeve top": "camiseta",
-    "vest": "camiseta",
-    "sling": "camiseta",
-    "shorts": "pantalon",
-    "trousers": "pantalon",
-    "skirt": "otros",
-    "short sleeve dress": "otros",
-    "long sleeve dress": "otros",
-    "vest dress": "otros",
-    "sling dress": "otros",
-    "short sleeve outwear": "otros",
-    "long sleeve outwear": "otros",
+CLASES_YOLO = {
+    "short_sleeved_shirt":   {"categoria": "prendas_superiores", "subcategoria": "camisetas"},
+    "long_sleeved_shirt":    {"categoria": "prendas_superiores", "subcategoria": "camisetas"},
+    "vest":                  {"categoria": "prendas_superiores", "subcategoria": "camisetas"},
+    "sling":                 {"categoria": "prendas_superiores", "subcategoria": "camisetas"},
+    "short_sleeved_outwear": {"categoria": "prendas_superiores", "subcategoria": "chaquetas_y_abrigos"},
+    "long_sleeved_outwear":  {"categoria": "prendas_superiores", "subcategoria": "chaquetas_y_abrigos"},
+    "shorts":                {"categoria": "prendas_inferiores", "subcategoria": "shorts"},
+    "trousers":              {"categoria": "prendas_inferiores", "subcategoria": "pantalones"},
+    "skirt":                 {"categoria": "prendas_inferiores", "subcategoria": "faldas"},
+    "short_sleeved_dress":   {"categoria": "cuerpo_entero",      "subcategoria": "vestidos"},
+    "long_sleeved_dress":    {"categoria": "cuerpo_entero",      "subcategoria": "vestidos"},
+    "vest_dress":            {"categoria": "cuerpo_entero",      "subcategoria": "vestidos"},
+    "sling_dress":           {"categoria": "cuerpo_entero",      "subcategoria": "vestidos"},
 }
 
-
-def _map_categoria(clase: str) -> str:
-    if clase is None:
-        return "otros"
-    nombre = clase.strip().lower().replace("_", " ")
-    return CATEGORIA_MAP.get(nombre, "otros")
+_FALLBACK = {"categoria": "otros", "subcategoria": "otros"}
 
 
-def _map_subcategoria(clase: str) -> str:
-    if clase is None:
-        return "otros"
-    return clase.strip().lower().replace("_", " ")
+def _map_clase(clase: str) -> tuple[str, str]:
+    if not clase:
+        return "otros", "otros"
+    info = CLASES_YOLO.get(clase.strip().lower(), _FALLBACK)
+    return info["categoria"], info["subcategoria"]
 
 
 router = APIRouter()
@@ -62,12 +58,14 @@ def _guardar_resultados_en_bd(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error al consultar SerpAPI: {str(e)}")
 
+    categoria, subcategoria = _map_clase(clase)
+
     prendas_guardadas: list[Prenda] = []
     for r in resultados:
         prenda = Prenda(
             nombre=r["nombre"],
-            categoria=_map_categoria(clase),
-            subcategoria=_map_subcategoria(clase),
+            categoria=categoria,
+            subcategoria=subcategoria,
             tienda=r["tienda"],
             precio=r["precio"],
             imagen_url=r["imagen_url"],
@@ -124,10 +122,8 @@ async def detectar_prendas(
 ):
     imagen_bytes = await imagen.read()
 
-    # 1. Calcular hash para caché (sobre la imagen original)
     imagen_hash = hashlib.sha256(imagen_bytes).hexdigest()
 
-    # 2. Comprobar caché en BD
     en_cache = db.query(Prenda).filter(Prenda.imagen_hash == imagen_hash).all()
     if en_cache:
         return DetectarResponse(
@@ -136,23 +132,20 @@ async def detectar_prendas(
             desde_cache=True,
         )
 
-    # 3. Detectar prendas con YOLO y obtener recortes individuales
     try:
         recortes = yolo_service.detectar_y_recortar(imagen_bytes)
     except Exception as e:
         logger.warning("Fallo en deteccion YOLO, se usa fallback de imagen completa: %s", str(e))
         recortes = []
 
-    # Si YOLO no detecta nada, usar la imagen completa como fallback
     if not recortes:
         recortes = [{"bytes": imagen_bytes, "clase": "unknown", "confianza": 1.0}]
 
     prendas_guardadas = []
-
     for recorte in recortes:
-        recorte_bytes = recorte["bytes"]
-        clase = recorte["clase"]
-        prendas_guardadas.extend(_guardar_resultados_en_bd(db, imagen_hash, clase, recorte_bytes))
+        prendas_guardadas.extend(
+            _guardar_resultados_en_bd(db, imagen_hash, recorte["clase"], recorte["bytes"])
+        )
 
     if not prendas_guardadas:
         return _build_detectar_response([], desde_cache=False)
