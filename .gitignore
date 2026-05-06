@@ -1,4 +1,3 @@
- HEAD
 # OS
 .DS_Store
 Thumbs.db
@@ -12,21 +11,11 @@ Thumbs.db
 # Secrets
 *.pem
 *.key
-node_modules/
-venv/
 .env
 
-# OS
-.DS_Store
-Thumbs.db
+# Dependencies
+node_modules/
+venv/
 
-# Editor
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Secrets
-*.pem
-*.key
- DEV-59-s3-bd-endpoints-de-login-con-contrasena
+# Claude Code (configuración local de permisos, no debe subirse)
+.claude/settings.local.json
