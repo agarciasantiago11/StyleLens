@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Prenda
+from app.models import Prenda, PrendaSuperior, PrendaInferior, CuerpoEntero
 from app.schemas import (
     DetectarResponse,
     DetectarCajasResponse,
@@ -28,6 +28,13 @@ CLASES_YOLO = {
 }
 
 _FALLBACK = {"categoria": "otros", "subcategoria": "otros"}
+
+# Mapea categoria → modelo SQLAlchemy para que JTI inserte en la subtabla correcta.
+_CATEGORIA_MODEL: dict[str, type[Prenda]] = {
+    "prendas_superiores": PrendaSuperior,
+    "prendas_inferiores": PrendaInferior,
+    "cuerpo_entero":      CuerpoEntero,
+}
 
 
 def _map_clase(clase: str) -> tuple[str, str]:
@@ -59,10 +66,12 @@ def _guardar_resultados_en_bd(
         raise HTTPException(status_code=502, detail=f"Error al consultar SerpAPI: {str(e)}")
 
     categoria, subcategoria = _map_clase(clase)
+    # Usa la subclase específica para que JTI inserte también en la subtabla correcta.
+    modelo = _CATEGORIA_MODEL.get(categoria, Prenda)
 
     prendas_guardadas: list[Prenda] = []
     for r in resultados:
-        prenda = Prenda(
+        prenda = modelo(
             nombre=r["nombre"],
             categoria=categoria,
             subcategoria=subcategoria,
