@@ -58,3 +58,13 @@ class FavoritoResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class UserMeResponse(BaseModel):
+    id: UUID | str | int
+    email: str
+    nombre_completo: str | None = None
+    role_id: int | None = None
+    role_priority: int = 0
+
+    model_config = {"from_attributes": True}
