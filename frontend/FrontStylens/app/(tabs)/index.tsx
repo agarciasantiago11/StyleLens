@@ -682,7 +682,7 @@ export default function StylensScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.headerBackground }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.appBackground }]}>
       <StatusBar style="light" backgroundColor={theme.headerBackground} translucent={false} />
 
         {/* Header */}
@@ -1207,7 +1207,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     borderWidth: 3,
     borderColor: "#22c55e",
-    backgroundColor: "rgba(34,197,94,0.16)",
+    backgroundColor: "transparent",
     borderRadius: 12,
     overflow: "hidden",
     justifyContent: "flex-start",
@@ -1216,7 +1216,7 @@ const styles = StyleSheet.create({
   },
   detectedBoxActive: {
     borderColor: "#f59e0b",
-    backgroundColor: "rgba(245,158,11,0.26)",
+    backgroundColor: "transparent",
   },
   detectedBoxLabelWrap: {
     backgroundColor: "rgba(0,0,0,0.72)",

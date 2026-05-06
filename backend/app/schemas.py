@@ -49,10 +49,19 @@ class BuscarResponse(BaseModel):
     desde_cache: bool
 
 
+<<<<<<< HEAD
 class FavoritoResponse(BaseModel):
     id: int
     prenda_id: int
     prenda: PrendaResponse
     created_at: datetime
+=======
+class UserMeResponse(BaseModel):
+    id: UUID | str | int
+    email: str
+    nombre_completo: str | None = None
+    role_id: int | None = None
+    role_priority: int = 0
+>>>>>>> DEV-61-s4-front-formulario-de-login-y-gestion-de-sesion
 
     model_config = {"from_attributes": True}

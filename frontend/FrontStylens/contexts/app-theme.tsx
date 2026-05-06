@@ -69,15 +69,55 @@ function hexToRgba(hexColor: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function getLightThemeBackground(themeId: ThemeId): string {
+  switch (themeId) {
+    case "dark":
+      return "#0b1220";
+    case "purple-pink":
+      return "#fbe4f1";
+    case "blue-cyan":
+      return "#deefff";
+    case "orange-red":
+      return "#ffe7d6";
+    case "green-emerald":
+      return "#dff6ea";
+    case "salmon-fuchsia":
+      return "#ffe2ec";
+    default:
+      return "#fbe4f1";
+  }
+}
+
+function getLightHeaderBackground(themeId: ThemeId): string {
+  switch (themeId) {
+    case "dark":
+      return "#111827";
+    case "purple-pink":
+      return "#fff2f8";
+    case "blue-cyan":
+      return "#edf6ff";
+    case "orange-red":
+      return "#fff3ea";
+    case "green-emerald":
+      return "#edfbf4";
+    case "salmon-fuchsia":
+      return "#fff1f6";
+    default:
+      return "#fff2f8";
+  }
+}
+
 function buildTheme(option: ThemeOption): AppTheme {
   const isDark = option.id === "dark";
+  const appBackground = isDark ? "#0b1220" : getLightThemeBackground(option.id);
+  const headerBackground = isDark ? "#111827" : getLightHeaderBackground(option.id);
 
   return {
     id: option.id,
     name: option.name,
     gradient: option.colors,
-    appBackground: isDark ? "#0b1220" : "#fdf4f8",
-    headerBackground: isDark ? "#111827" : "#ffffff",
+    appBackground,
+    headerBackground,
     surface: isDark ? "#1f2937" : "#ffffff",
     surfaceSoft: isDark ? "#0f172a" : "#f9fafb",
     border: isDark ? "#334155" : "#e5e7eb",
