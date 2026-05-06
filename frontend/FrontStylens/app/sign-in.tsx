@@ -7,6 +7,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -87,92 +88,99 @@ export default function SignInPage() {
         <SignInBackgroundCarousel images={SIGN_IN_CAROUSEL_IMAGES} />
         <KeyboardAvoidingView
           style={styles.container}
-          behavior={Platform.select({ ios: "padding", android: undefined })}
+          behavior={Platform.select({ ios: "padding", android: "height" })}
+          keyboardVerticalOffset={Platform.select({ ios: 8, android: 0 })}
         >
-          <LinearGradient
-            colors={heroColors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.hero}
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            <ThemedText type="title" style={styles.heroTitle}>
-              Stylens
-            </ThemedText>
-            <ThemedText type="defaultSemiBold" style={styles.heroSubtitle}>
-              Inicia sesión y explora tu tablero.
-            </ThemedText>
-          </LinearGradient>
-
-          <View
-            style={[
-              styles.box,
-              {
-                backgroundColor: "transparent",
-                borderColor: "transparent",
-              },
-            ]}
-          > 
-            <View
-              style={[
-                styles.inputGroup,
-                {
-                  backgroundColor: inputSurface,
-                  borderColor: inputBorder,
-                },
-              ]}
-            > 
-              <ThemedText style={[styles.inputLabel, { color: labelColor }]}>Correo electrónico</ThemedText>
-              <TextInput
-                style={[styles.input, { color: headingColor }]}
-                value={email}
-                placeholder="usuario@ejemplo.com"
-                placeholderTextColor={mutedColor}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                textContentType="username"
-                onChangeText={setEmail}
-              />
-            </View>
-
-            <View
-              style={[
-                styles.inputGroup,
-                {
-                  backgroundColor: inputSurface,
-                  borderColor: inputBorder,
-                },
-              ]}
-            > 
-              <ThemedText style={[styles.inputLabel, { color: labelColor }]}>Contraseña</ThemedText>
-              <TextInput
-                style={[styles.input, { color: headingColor }]}
-                value={password}
-                placeholder="••••••••"
-                placeholderTextColor={mutedColor}
-                secureTextEntry
-                textContentType="password"
-                onChangeText={setPassword}
-              />
-            </View>
-
-            {errorMessage ? (
-              <ThemedText style={[styles.errorText, { color: theme.danger }]}>
-                {errorMessage}
-              </ThemedText>
-            ) : null}
-
-            <TouchableOpacity
-              style={[styles.button, { backgroundColor: theme.accent }]}
-              onPress={handleLogin}
-              disabled={isSubmitting}
+            <LinearGradient
+              colors={heroColors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.hero}
             >
-              {isSubmitting ? (
-                <ActivityIndicator color={theme.onAccent} />
-              ) : (
-                <ThemedText style={[styles.buttonText, { color: theme.onAccent }]}>Entrar</ThemedText>
-              )}
-            </TouchableOpacity>
-          </View>
+              <ThemedText type="title" style={styles.heroTitle}>
+                Stylens
+              </ThemedText>
+              <ThemedText type="defaultSemiBold" style={styles.heroSubtitle}>
+                Inicia sesión y explora tu tablero.
+              </ThemedText>
+            </LinearGradient>
+
+            <View
+              style={[
+                styles.box,
+                {
+                  backgroundColor: "transparent",
+                  borderColor: "transparent",
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.inputGroup,
+                  {
+                    backgroundColor: inputSurface,
+                    borderColor: inputBorder,
+                  },
+                ]}
+              >
+                <ThemedText style={[styles.inputLabel, { color: labelColor }]}>Correo electrónico</ThemedText>
+                <TextInput
+                  style={[styles.input, { color: headingColor }]}
+                  value={email}
+                  placeholder="usuario@ejemplo.com"
+                  placeholderTextColor={mutedColor}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  textContentType="username"
+                  onChangeText={setEmail}
+                />
+              </View>
+
+              <View
+                style={[
+                  styles.inputGroup,
+                  {
+                    backgroundColor: inputSurface,
+                    borderColor: inputBorder,
+                  },
+                ]}
+              >
+                <ThemedText style={[styles.inputLabel, { color: labelColor }]}>Contraseña</ThemedText>
+                <TextInput
+                  style={[styles.input, { color: headingColor }]}
+                  value={password}
+                  placeholder="••••••••"
+                  placeholderTextColor={mutedColor}
+                  secureTextEntry
+                  textContentType="password"
+                  onChangeText={setPassword}
+                />
+              </View>
+
+              {errorMessage ? (
+                <ThemedText style={[styles.errorText, { color: theme.danger }]}>
+                  {errorMessage}
+                </ThemedText>
+              ) : null}
+
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: theme.accent }]}
+                onPress={handleLogin}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color={theme.onAccent} />
+                ) : (
+                  <ThemedText style={[styles.buttonText, { color: theme.onAccent }]}>Entrar</ThemedText>
+                )}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </PublicOnlyRoute>
@@ -185,7 +193,11 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "space-between",
+    paddingBottom: 20,
   },
   hero: {
     padding: 28,
@@ -215,7 +227,7 @@ const styles = StyleSheet.create({
   },
   box: {
     margin: 16,
-    marginTop: -48,
+    marginTop: 8,
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
