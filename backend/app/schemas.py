@@ -68,3 +68,25 @@ class UserMeResponse(BaseModel):
     role_priority: int = 0
 
     model_config = {"from_attributes": True}
+
+
+class OTPRequestBody(BaseModel):
+    email: str
+
+
+class VerifyOTPBody(BaseModel):
+    email: str
+    otp: str
+
+
+class UserBasicResponse(BaseModel):
+    id: UUID | str
+    email: str
+    nombre_completo: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class VerifyOTPResponse(BaseModel):
+    user: UserBasicResponse
+    token: str

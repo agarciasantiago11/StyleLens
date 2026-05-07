@@ -43,6 +43,11 @@ _DROP_LEGACY_TABLES = [
 # Columnas que deben existir en public.prendas (ADD COLUMN IF NOT EXISTS es idempotente).
 # El embedding ya NO vive en esta tabla: reside en las subtablas JTI
 # (prendas_superiores, prendas_inferiores, cuerpo_entero).
+_ENSURE_USUARIOS_COLUMNS = [
+    "ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS otp_hash        TEXT",
+    "ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS otp_expiration  TIMESTAMPTZ",
+]
+
 _ENSURE_PRENDAS_COLUMNS = [
     "ALTER TABLE public.prendas ADD COLUMN IF NOT EXISTS categoria      TEXT",
     "ALTER TABLE public.prendas ADD COLUMN IF NOT EXISTS subcategoria   TEXT",
@@ -77,13 +82,19 @@ def main() -> None:
         models.Base.metadata.create_all(bind=engine)
         print("  ✓ Tablas creadas")
 
-        # 4. Asegurar columnas e índices en prendas (necesario para bases de datos existentes)
+        # 4. Asegurar columnas en usuarios (otp_hash, otp_expiration)
+        with engine.begin() as conn:
+            for stmt in _ENSURE_USUARIOS_COLUMNS:
+                conn.execute(text(stmt))
+        print("  ✓ Columnas OTP en usuarios verificadas")
+
+        # 5. Asegurar columnas e índices en prendas (necesario para bases de datos existentes)
         with engine.begin() as conn:
             for stmt in _ENSURE_PRENDAS_COLUMNS:
                 conn.execute(text(stmt))
-        print("  ✓ Columnas e índices verificados")
+        print("  ✓ Columnas e índices de prendas verificados")
 
-        # 5. Índices HNSW sobre los embeddings de las subtablas.
+        # 6. Índices HNSW sobre los embeddings de las subtablas.
         #    Permiten búsqueda vectorial por similitud de coseno en O(log n)
         #    en lugar de escaneo secuencial. Se crean solo si la columna ya existe.
         _HNSW = [
