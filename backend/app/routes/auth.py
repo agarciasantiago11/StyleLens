@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models import Usuario, Role
 from app.schemas import UserMeResponse
-from app.auth_utils import verify_password, generate_token
+from app.auth_utils import verify_password, create_access_token
 from datetime import datetime, timedelta, timezone
 
 router = APIRouter()
@@ -34,7 +34,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     if not usuario or not verify_password(request.password, usuario.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
-    token = generate_token()
+    token = create_access_token(str(usuario.id))
     usuario.token = token
     usuario.token_expiration = datetime.now(timezone.utc) + timedelta(hours=1)
     db.commit()
