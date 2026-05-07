@@ -85,9 +85,58 @@ class Usuario(Base):
     password_hash = Column(String, nullable=False)
     nombre_completo = Column(String)
     role_id = Column(Integer, ForeignKey("roles.id"))
+    fecha_registro = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
     token = Column(String)
     token_expiration = Column(DateTime)
+
+    busquedas = relationship("Busqueda", back_populates="usuario", cascade="all, delete-orphan")
+
+
+class Busqueda(Base):
+    __tablename__ = "busquedas"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    usuario_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"), nullable=False, index=True)
+    imagen_original_url = Column(String, nullable=True)
+    imagen_hash_original = Column(String, nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    usuario = relationship("Usuario", back_populates="busquedas")
+    detecciones = relationship("Deteccion", back_populates="busqueda", cascade="all, delete-orphan")
+
+
+class Deteccion(Base):
+    __tablename__ = "detecciones"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    busqueda_id = Column(UUID(as_uuid=True), ForeignKey("busquedas.id"), nullable=False, index=True)
+    clase = Column(String, nullable=True)        # etiqueta YOLO de la prenda detectada (ej. "trousers")
+    confianza = Column(Float, nullable=True)     # puntuación de confianza del modelo (0.0 – 1.0)
+    bbox_x = Column(Float, nullable=True)        # coordenada X del centro del bounding box (normalizada 0-1)
+    bbox_y = Column(Float, nullable=True)        # coordenada Y del centro del bounding box (normalizada 0-1)
+    bbox_w = Column(Float, nullable=True)        # ancho del bounding box (normalizado 0-1)
+    bbox_h = Column(Float, nullable=True)        # alto del bounding box (normalizado 0-1)
+    recorte_url = Column(String, nullable=True)  # URL en Cloudinary del recorte de la prenda detectada
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    busqueda = relationship("Busqueda", back_populates="detecciones")
+    resultados = relationship("Resultado", back_populates="deteccion", cascade="all, delete-orphan")
+
+
+class Resultado(Base):
+    __tablename__ = "resultados"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    deteccion_id = Column(UUID(as_uuid=True), ForeignKey("detecciones.id"), nullable=False, index=True)
+    prenda_id = Column(UUID(as_uuid=True), ForeignKey("prendas.id"), nullable=False, index=True)
+    rank = Column(Integer, nullable=True)           # posición del resultado dentro de la detección (1 = más relevante)
+    similitud_score = Column(Float, nullable=True)  # puntuación de similitud vectorial con la prenda detectada (0.0 – 1.0)
+    fuente = Column(String, nullable=True)          # origen del resultado: "cache", "serpapi" o "vectorial"
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    deteccion = relationship("Deteccion", back_populates="resultados")
+    prenda = relationship("Prenda")
 
 
 class Favorito(Base):

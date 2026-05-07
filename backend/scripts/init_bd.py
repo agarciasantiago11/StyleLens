@@ -4,7 +4,7 @@ Inicializa (o actualiza) la base de datos StyleLens:
   2. Elimina tablas legacy que ya no forman parte del modelo.
   3. Crea las tablas a partir de los modelos SQLAlchemy (idempotente):
        prendas, prendas_superiores, prendas_inferiores, cuerpo_entero,
-       roles, usuarios, favoritos
+       roles, usuarios, favoritos. 
   4. Garantiza que las columnas e índices de 'prendas' existen
      tanto en instalaciones nuevas como en bases de datos existentes.
 
