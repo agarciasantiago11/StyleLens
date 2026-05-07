@@ -171,6 +171,17 @@ class Resultado(Base):
     prenda = relationship("Prenda")
 
 
+class AccessRequest(Base):
+    __tablename__ = "access_requests"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    message = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="pending")  # pending | approved | rejected
+
+
 class Favorito(Base):
     __tablename__ = "favoritos"
 

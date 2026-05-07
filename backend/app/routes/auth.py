@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
 from app.models import Usuario, Role
-from app.schemas import UserMeResponse, OTPRequestBody, VerifyOTPBody, VerifyOTPResponse, UserBasicResponse
+from app.schemas import UserMeResponse, OTPRequestBody, VerifyOTPBody, VerifyOTPResponse, UserBasicResponse, AccessRequestBody
 from app.auth_utils import verify_password, generate_token, create_access_token
-from app.services.email_service import send_otp_email
+from app.services.email_service import send_otp_email, send_access_request_email
+from app.models import AccessRequest
 from datetime import datetime, timedelta, timezone
 
 router = APIRouter()
@@ -36,6 +37,7 @@ class _RateLimiter:
 
 _otp_request_limiter = _RateLimiter(max_calls=5, period_seconds=60)
 _otp_verify_limiter = _RateLimiter(max_calls=10, period_seconds=60)
+_access_request_limiter = _RateLimiter(max_calls=3, period_seconds=60)
 
 
 def _is_token_expired(token_expiration: datetime | None) -> bool:
@@ -165,3 +167,24 @@ def verify_otp(body: VerifyOTPBody, request: Request, db: Session = Depends(get_
         ),
         token=token,
     )
+
+
+@router.post("/request-access")
+def request_access(body: AccessRequestBody, request: Request, db: Session = Depends(get_db)):
+    _access_request_limiter.check(request)
+
+    access_request = AccessRequest(
+        email=body.email,
+        name=body.name,
+        message=body.message,
+    )
+    db.add(access_request)
+    db.commit()
+
+    try:
+        send_access_request_email(body.name, body.email, body.message or "")
+    except Exception as e:
+        # La solicitud queda guardada en BD aunque falle el email al admin
+        print(f"[WARN] No se pudo notificar al admin: {e}")
+
+    return {"message": "Solicitud enviada correctamente. El administrador se pondrá en contacto contigo."}

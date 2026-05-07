@@ -70,6 +70,12 @@ class UserMeResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AccessRequestBody(BaseModel):
+    email: str
+    name: str
+    message: Optional[str] = None
+
+
 class OTPRequestBody(BaseModel):
     email: str
 
