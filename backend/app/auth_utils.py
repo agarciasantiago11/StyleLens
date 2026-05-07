@@ -1,5 +1,6 @@
 import bcrypt
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 
@@ -28,3 +29,7 @@ def decode_token(token: str) -> str:
     if not user_id:
         raise JWTError("Token inválido")
     return user_id
+
+
+def generate_token() -> str:
+    return secrets.token_hex(32)
