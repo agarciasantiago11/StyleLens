@@ -4,11 +4,13 @@ import {
   Alert,
   Image,
   Linking,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -45,6 +47,12 @@ type FavoriteProduct = {
 export default function FavoritosScreen() {
   const router = useRouter();
   const { theme } = useAppTheme();
+  const { width: viewportWidth } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === "web" && viewportWidth >= 1024;
+  const desktopColumns = viewportWidth >= 1500 ? 4 : viewportWidth >= 1180 ? 3 : 2;
+  const cardWidth = isDesktopWeb
+    ? Math.max(260, Math.min(360, Math.floor((Math.min(viewportWidth, 1440) - 56) / desktopColumns)))
+    : null;
   const token = useAuthStore((state) => state.token);
   const [favorites, setFavorites] = useState<FavoriteProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,14 +173,22 @@ export default function FavoritosScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.grid}
+          contentContainerStyle={[styles.grid, isDesktopWeb && styles.gridDesktop]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />}
         >
           {favorites.map((product) => {
             const isRemoving = removingIds.includes(product.id);
             return (
-              <View key={product.id} style={[styles.productCard, { backgroundColor: theme.surface }]}>
-                <View style={styles.productImageWrap}>
+              <View
+                key={product.id}
+                style={[
+                  styles.productCard,
+                  isDesktopWeb && styles.productCardDesktop,
+                  isDesktopWeb && cardWidth ? { width: cardWidth } : null,
+                  { backgroundColor: theme.surface },
+                ]}
+              >
+                <View style={[styles.productImageWrap, isDesktopWeb && styles.productImageWrapDesktop]}>
                   <Image source={{ uri: product.image }} style={styles.productImage} resizeMode="contain" />
                 </View>
                 <View style={styles.favoriteBadge}>
@@ -272,6 +288,13 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingBottom: 16,
   },
+  gridDesktop: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 14,
+    alignItems: "stretch",
+    justifyContent: "flex-start",
+  },
   productCard: {
     backgroundColor: "#fff",
     borderRadius: 16,
@@ -282,12 +305,19 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
+  productCardDesktop: {
+    minWidth: 260,
+    maxWidth: 360,
+  },
   productImageWrap: {
     width: "100%",
     height: 170,
     backgroundColor: "#f3f4f6",
     alignItems: "center",
     justifyContent: "center",
+  },
+  productImageWrapDesktop: {
+    height: 210,
   },
   productImage: {
     width: "94%",
