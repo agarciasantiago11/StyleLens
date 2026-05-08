@@ -1,8 +1,11 @@
-from fastapi import Depends, HTTPException, Header
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from app.database import get_db
 from app.models import Usuario, Role
+
+bearer_scheme = HTTPBearer()
 
 
 def _is_token_expired(token_expiration: datetime | None) -> bool:
@@ -17,13 +20,10 @@ def _is_token_expired(token_expiration: datetime | None) -> bool:
 
 
 def get_current_user(
-    authorization: str | None = Header(None),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> Usuario:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Token inválido o expirado")
-
-    token = authorization.split(" ", 1)[1].strip()
+    token = credentials.credentials
     usuario = db.query(Usuario).filter(Usuario.token == token).first()
 
     if not usuario or _is_token_expired(usuario.token_expiration):

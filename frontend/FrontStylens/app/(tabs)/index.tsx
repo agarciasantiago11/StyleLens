@@ -25,6 +25,8 @@ import { useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import TipsBottomSheet, { TipsBottomSheetRef } from "./TipsBottomSheet";
 import { useAppTheme } from "@/contexts/app-theme";
+import apiClient from "@/api/client";
+import { useAuthStore } from "@/store/authStore";
 
 const FORMATS = ["JPG", "PNG", "GIF", "WEBP", "HEIC"];
 const HIDE_TIPS_KEY = "stylelens.hide-recommendations";
@@ -77,6 +79,10 @@ type Product = {
   price: string;
   link: string;
   category: string;
+};
+
+type BackendErrorPayload = {
+  detail?: unknown;
 };
 
 type SelectableBox = {
@@ -316,7 +322,9 @@ export default function StylensScreen() {
   const [imageSize, setImageSize] = useState<{ width: number; height: number }>({ width: 1, height: 1 });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hideTips, setHideTips] = useState(false);
+  const [favoritePendingIds, setFavoritePendingIds] = useState<Array<string | number>>([]);
   const { theme } = useAppTheme();
+  const token = useAuthStore((state) => state.token);
   const scaleCamera = useRef(new Animated.Value(1)).current;
   const scaleGallery = useRef(new Animated.Value(1)).current;
   const tipsSheetRef = useRef<TipsBottomSheetRef>(null);
@@ -537,12 +545,35 @@ export default function StylensScreen() {
     }
   };
 
-  const toggleFavorite = (productId: string | number) => {
-    setFavorites((prev) =>
-      prev.includes(productId)
-        ? prev.filter((id) => id !== productId)
-        : [...prev, productId]
-    );
+  const handleAddFavorite = async (product: Product) => {
+    if (favorites.includes(product.id)) {
+      return;
+    }
+
+    if (!token) {
+      Alert.alert("Inicia sesión", "Debes iniciar sesión para guardar favoritos.");
+      return;
+    }
+
+    if (typeof product.id !== "string" || product.id.trim().length === 0) {
+      Alert.alert(
+        "No se pudo guardar",
+        "Esta prenda no tiene un identificador válido para guardarse en favoritos."
+      );
+      return;
+    }
+
+    setFavoritePendingIds((prev) => [...prev, product.id]);
+
+    try {
+      await apiClient.post(`/api/v1/favoritos/${product.id}`);
+      setFavorites((prev) => [...prev, product.id]);
+    } catch (error) {
+      const detail = getApiErrorDetail((error as { response?: { data?: BackendErrorPayload } })?.response?.data);
+      Alert.alert("No se pudo guardar", detail ?? toErrorMessage(error));
+    } finally {
+      setFavoritePendingIds((prev) => prev.filter((id) => id !== product.id));
+    }
   };
 
   const handleBackToSelect = () => {
@@ -593,6 +624,7 @@ export default function StylensScreen() {
 
   const renderProductCard = (product: Product, useMobileCard = false) => {
     const isFavorite = favorites.includes(product.id);
+    const isFavoritePending = favoritePendingIds.includes(product.id);
 
     return (
       <TouchableOpacity
@@ -639,17 +671,26 @@ export default function StylensScreen() {
             />
           )}
           <TouchableOpacity
-            style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]}
+            style={[
+              styles.favoriteButton,
+              isFavorite && styles.favoriteButtonActive,
+              isFavoritePending && styles.favoriteButtonDisabled,
+            ]}
+            disabled={isFavoritePending}
             onPress={(e) => {
               e.stopPropagation?.();
-              toggleFavorite(product.id);
+              void handleAddFavorite(product);
             }}
           >
-            <Ionicons
-              name={isFavorite ? "star" : "star-outline"}
-              size={15}
-              color={isFavorite ? "#f59e0b" : "#9ca3af"}
-            />
+            {isFavoritePending ? (
+              <ActivityIndicator size="small" color="#9ca3af" />
+            ) : (
+              <Ionicons
+                name={isFavorite ? "star" : "star-outline"}
+                size={15}
+                color={isFavorite ? "#f59e0b" : "#9ca3af"}
+              />
+            )}
           </TouchableOpacity>
           <View style={styles.productPriceBadge}>
             <Text style={styles.productPriceBadgeText} numberOfLines={1}>
@@ -707,7 +748,7 @@ export default function StylensScreen() {
         </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { backgroundColor: theme.appBackground }]}
         style={{ backgroundColor: theme.appBackground }}
       >
         {screenState === "home" && (
@@ -1014,7 +1055,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 40,
-    backgroundColor: "#fdf4f8",
     flexGrow: 1,
   },
 
@@ -1399,6 +1439,9 @@ const styles = StyleSheet.create({
   },
   favoriteButtonActive: {
     backgroundColor: "#fffbeb",
+  },
+  favoriteButtonDisabled: {
+    opacity: 0.75,
   },
   productBody: {
     padding: 10,

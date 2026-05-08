@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
@@ -6,6 +7,8 @@ from app.models import Usuario, Role
 from app.schemas import UserMeResponse
 from app.auth_utils import verify_password, create_access_token
 from datetime import datetime, timedelta, timezone
+
+bearer_scheme = HTTPBearer()
 
 router = APIRouter()
 
@@ -44,13 +47,10 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserMeResponse)
 def me(
-    authorization: str | None = Header(None),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Token inválido o expirado")
-
-    token = authorization.split(" ", 1)[1].strip()
+    token = credentials.credentials
     usuario = db.query(Usuario).filter(Usuario.token == token).first()
 
     if not usuario or _is_token_expired(usuario.token_expiration):
@@ -73,13 +73,10 @@ def me(
 
 @router.post("/logout")
 def logout(
-    authorization: str | None = Header(None),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Token inválido o expirado")
-
-    token = authorization.split(" ", 1)[1].strip()
+    token = credentials.credentials
     usuario = db.query(Usuario).filter(Usuario.token == token).first()
 
     if usuario:

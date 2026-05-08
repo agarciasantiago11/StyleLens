@@ -1,53 +1,133 @@
-import React, { useMemo, useState } from "react";
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenShell } from "@/components/screen-shell";
 import { useRouter } from "expo-router";
 import { useAppTheme } from "@/contexts/app-theme";
+import { useFocusEffect } from "@react-navigation/native";
+import apiClient from "@/api/client";
+import { useAuthStore } from "@/store/authStore";
+
+type FavoritoApi = {
+  prenda_id: string;
+  prenda: {
+    id: string;
+    nombre: string;
+    precio?: number | null;
+    precio_actual?: number | null;
+    imagen_url?: string | null;
+    link?: string | null;
+    tienda?: string | null;
+    marca?: string | null;
+  };
+  created_at: string;
+};
+
+type FavoriteProduct = {
+  id: string;
+  image: string;
+  name: string;
+  price: string;
+  link: string | null;
+};
 
 export default function FavoritosScreen() {
   const router = useRouter();
   const { theme } = useAppTheme();
-  const [favorites, setFavorites] = useState<number[]>([]);
+  const token = useAuthStore((state) => state.token);
+  const [favorites, setFavorites] = useState<FavoriteProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [removingIds, setRemovingIds] = useState<string[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const mockProducts = useMemo(
-    () => [
-      {
-        id: 1,
-        image: "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=400",
-        name: "Camiseta básica blanca",
-        price: "29.99 EUR",
-        link: "https://example.com/product1",
-      },
-      {
-        id: 2,
-        image: "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400",
-        name: "Pantalón vaquero slim fit",
-        price: "59.99 EUR",
-        link: "https://example.com/product2",
-      },
-      {
-        id: 3,
-        image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400",
-        name: "Sudadera con capucha gris",
-        price: "45.99 EUR",
-        link: "https://example.com/product3",
-      },
-      {
-        id: 4,
-        image: "https://images.unsplash.com/photo-1606821011768-d4c3f9e3c3e8?w=400",
-        name: "Zapatillas deportivas negras",
-        price: "89.99 EUR",
-        link: "https://example.com/product4",
-      },
-    ],
-    []
+  const formatPrice = (value?: number | null): string => {
+    if (value == null) return "Precio no disponible";
+    return `${value.toFixed(2)} EUR`;
+  };
+
+  const mapFavoritos = (items: FavoritoApi[]): FavoriteProduct[] => {
+    return items.map((item) => {
+      const prenda = item.prenda;
+      return {
+        id: String(item.prenda_id || prenda.id),
+        image: prenda.imagen_url || "https://via.placeholder.com/600x400?text=Sin+imagen",
+        name: prenda.nombre,
+        price: formatPrice(prenda.precio_actual ?? prenda.precio),
+        link: prenda.link ?? null,
+      };
+    });
+  };
+
+  const loadFavoritos = useCallback(async () => {
+    if (!token) {
+      setFavorites([]);
+      setErrorMessage("Inicia sesión para ver tus favoritos.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setErrorMessage(null);
+      const { data } = await apiClient.get<FavoritoApi[]>("/api/v1/favoritos");
+      setFavorites(mapFavoritos(data ?? []));
+    } catch {
+      setErrorMessage("No se pudo cargar la lista de favoritos.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      void loadFavoritos();
+    }, [loadFavoritos])
   );
 
-  const favoriteProducts = mockProducts.filter((item) => favorites.includes(item.id));
+  const onRefresh = () => {
+    setRefreshing(true);
+    void loadFavoritos();
+  };
 
-  const toggleFavorite = (id: number) => {
-    setFavorites((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const removeFavorite = async (id: string) => {
+    setRemovingIds((prev) => [...prev, id]);
+
+    try {
+      await apiClient.delete(`/api/v1/favoritos/${id}`);
+      setFavorites((prev) => prev.filter((item) => item.id !== id));
+    } catch {
+      Alert.alert("No se pudo eliminar", "Intenta de nuevo en unos segundos.");
+    } finally {
+      setRemovingIds((prev) => prev.filter((value) => value !== id));
+    }
+  };
+
+  const openProduct = async (url: string | null) => {
+    if (!url) {
+      Alert.alert("Sin enlace", "Este favorito no tiene un enlace disponible.");
+      return;
+    }
+
+    const canOpen = await Linking.canOpenURL(url);
+    if (!canOpen) {
+      Alert.alert("Enlace no válido", "No se puede abrir este enlace.");
+      return;
+    }
+
+    await Linking.openURL(url);
   };
 
   return (
@@ -60,52 +140,62 @@ export default function FavoritosScreen() {
         <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>{favorites.length} productos guardados</Text>
       </View>
 
-      {favorites.length === 0 ? (
+      {loading ? (
+        <View style={[styles.emptyCard, { backgroundColor: theme.surface }]}> 
+          <ActivityIndicator size="small" color={theme.accent} />
+          <Text style={[styles.cardText, { color: theme.textSecondary }]}>Cargando favoritos...</Text>
+        </View>
+      ) : errorMessage ? (
+        <View style={[styles.emptyCard, { backgroundColor: theme.surface }]}> 
+          <Ionicons name="alert-circle-outline" size={36} color={theme.textMuted} />
+          <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>No se pudieron cargar</Text>
+          <Text style={[styles.cardText, { color: theme.textSecondary }]}>{errorMessage}</Text>
+          <Pressable style={[styles.primaryButton, { backgroundColor: theme.accent }]} onPress={() => onRefresh()}>
+            <Text style={styles.primaryButtonText}>Reintentar</Text>
+          </Pressable>
+        </View>
+      ) : favorites.length === 0 ? (
         <View style={[styles.emptyCard, { backgroundColor: theme.surface }]}> 
           <Ionicons name="star-outline" size={38} color={theme.textMuted} />
           <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>No tienes favoritos aún</Text>
-          <Text style={[styles.cardText, { color: theme.textSecondary }]}>Agrega productos a favoritos para guardarlos aquí.</Text>
+          <Text style={[styles.cardText, { color: theme.textSecondary }]}>Guarda productos desde Buscar para verlos aquí.</Text>
           <Pressable style={[styles.primaryButton, { backgroundColor: theme.accent }]} onPress={() => router.push("/(tabs)" as any)}>
-            <Text style={styles.primaryButtonText}>Buscar productos</Text>
+            <Text style={styles.primaryButtonText}>Ir a buscar</Text>
           </Pressable>
-
-          <Text style={styles.suggestedTitle}>Sugeridos (toca estrella para guardar)</Text>
-          <View style={styles.suggestedGrid}>
-            {mockProducts.map((product) => {
-              const isFav = favorites.includes(product.id);
-              return (
-                <Pressable key={product.id} style={[styles.suggestedCard, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => toggleFavorite(product.id)}>
-                  <Image source={{ uri: product.image }} style={styles.suggestedImage} />
-                  <View style={styles.suggestedInfo}>
-                    <Text style={[styles.suggestedName, { color: theme.textSecondary }]} numberOfLines={2}>{product.name}</Text>
-                    <Ionicons name={isFav ? "star" : "star-outline"} size={16} color={isFav ? "#f59e0b" : "#9ca3af"} />
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.grid}>
-          {favoriteProducts.map((product) => (
-            <View key={product.id} style={[styles.productCard, { backgroundColor: theme.surface }]}>
-              <Image source={{ uri: product.image }} style={styles.productImage} />
-              <View style={styles.favoriteBadge}>
-                <Pressable onPress={() => toggleFavorite(product.id)}>
-                  <Ionicons name="star" size={16} color="#f59e0b" />
-                </Pressable>
-              </View>
+        <ScrollView
+          contentContainerStyle={styles.grid}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />}
+        >
+          {favorites.map((product) => {
+            const isRemoving = removingIds.includes(product.id);
+            return (
+              <View key={product.id} style={[styles.productCard, { backgroundColor: theme.surface }]}>
+                <View style={styles.productImageWrap}>
+                  <Image source={{ uri: product.image }} style={styles.productImage} resizeMode="contain" />
+                </View>
+                <View style={styles.favoriteBadge}>
+                  <Pressable disabled={isRemoving} onPress={() => void removeFavorite(product.id)}>
+                    {isRemoving ? (
+                      <ActivityIndicator size="small" color="#f59e0b" />
+                    ) : (
+                      <Ionicons name="star" size={16} color="#f59e0b" />
+                    )}
+                  </Pressable>
+                </View>
 
-              <View style={styles.productBody}>
-                <Text style={[styles.productName, { color: theme.textPrimary }]} numberOfLines={2}>{product.name}</Text>
-                <Text style={[styles.productPrice, { color: theme.textSecondary }]}>{product.price}</Text>
-                <Pressable style={[styles.linkButton, { backgroundColor: theme.accent }]} onPress={() => Linking.openURL(product.link)}>
-                  <Text style={styles.linkButtonText}>Ver producto</Text>
-                  <Ionicons name="open-outline" size={14} color="#fff" />
-                </Pressable>
+                <View style={styles.productBody}>
+                  <Text style={[styles.productName, { color: theme.textPrimary }]} numberOfLines={2}>{product.name}</Text>
+                  <Text style={[styles.productPrice, { color: theme.textSecondary }]}>{product.price}</Text>
+                  <Pressable style={[styles.linkButton, { backgroundColor: theme.accent }]} onPress={() => void openProduct(product.link)}>
+                    <Text style={styles.linkButtonText}>Ver producto</Text>
+                    <Ionicons name="open-outline" size={14} color="#fff" />
+                  </Pressable>
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </ScrollView>
       )}
     </ScreenShell>
@@ -178,42 +268,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
-  suggestedTitle: {
-    marginTop: 12,
-    marginBottom: 2,
-    alignSelf: "flex-start",
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#374151",
-  },
-  suggestedGrid: {
-    width: "100%",
-    gap: 8,
-  },
-  suggestedCard: {
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 12,
-    overflow: "hidden",
-    backgroundColor: "#fff",
-  },
-  suggestedImage: {
-    width: "100%",
-    height: 120,
-    backgroundColor: "#f3f4f6",
-  },
-  suggestedInfo: {
-    padding: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  suggestedName: {
-    flex: 1,
-    fontSize: 13,
-    color: "#374151",
-  },
   grid: {
     gap: 10,
     paddingBottom: 16,
@@ -228,10 +282,16 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
-  productImage: {
+  productImageWrap: {
     width: "100%",
     height: 170,
     backgroundColor: "#f3f4f6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  productImage: {
+    width: "94%",
+    height: "94%",
   },
   favoriteBadge: {
     position: "absolute",

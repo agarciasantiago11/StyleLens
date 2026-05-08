@@ -21,16 +21,17 @@ CASCADE;
 -- ==========================================================
 -- 2. USUARIOS DE PRUEBA
 -- ==========================================================
+-- Contraseñas: admin → admin123 | usuario → user123
 INSERT INTO public.usuarios (id, email, password_hash, nombre_completo, role_id, is_active) VALUES
 ('a0000000-0000-0000-0000-000000000001',
  'admin@stylelens.com',
- '$2b$12$hash_admin_placeholder',
+ '$2b$12$ZSaMLVcvPwrmCgQnoGyesO8lBL2u2NAjWlX6bpUfgE8OeygBwSGKS',
  'Admin StyleLens',
  (SELECT id FROM public.roles WHERE nombre = 'Admin'),
  TRUE),
 ('a0000000-0000-0000-0000-000000000002',
  'usuario@stylelens.com',
- '$2b$12$hash_user_placeholder',
+ '$2b$12$8KKYIVV1ECcmhO1RrCDr3ul2wdACzSXXeiV0HZOjZDrSnwh.HaDIW',
  'Usuario Test',
  (SELECT id FROM public.roles WHERE nombre = 'User'),
  TRUE);
