@@ -85,6 +85,10 @@ type BackendErrorPayload = {
   detail?: unknown;
 };
 
+type FavoritoApi = {
+  prenda_id?: string | number | null;
+};
+
 type SelectableBox = {
   id: number;
   clase: string;
@@ -314,7 +318,7 @@ export default function StylensScreen() {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [screenState, setScreenState] = useState<ScreenState>("home");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [favorites, setFavorites] = useState<Array<string | number>>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [detectedBoxes, setDetectedBoxes] = useState<SelectableBox[]>([]);
   const [selectedBoxId, setSelectedBoxId] = useState<number | null>(null);
@@ -322,7 +326,7 @@ export default function StylensScreen() {
   const [imageSize, setImageSize] = useState<{ width: number; height: number }>({ width: 1, height: 1 });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hideTips, setHideTips] = useState(false);
-  const [favoritePendingIds, setFavoritePendingIds] = useState<Array<string | number>>([]);
+  const [favoritePendingIds, setFavoritePendingIds] = useState<string[]>([]);
   const { theme } = useAppTheme();
   const token = useAuthStore((state) => state.token);
   const scaleCamera = useRef(new Animated.Value(1)).current;
@@ -343,6 +347,34 @@ export default function StylensScreen() {
         .then((value) => setHideTips(value === "true"))
         .catch(() => setHideTips(false));
     }, [])
+  );
+
+  const loadFavoriteIds = useCallback(async () => {
+    if (!token) {
+      setFavorites([]);
+      return;
+    }
+
+    try {
+      const { data } = await apiClient.get<FavoritoApi[]>("/api/v1/favoritos");
+      const ids = (data ?? [])
+        .map((item) => (item.prenda_id == null ? "" : String(item.prenda_id).trim()))
+        .filter((id): id is string => id.length > 0);
+
+      setFavorites(Array.from(new Set(ids)));
+    } catch {
+      // Evitamos alertas intrusivas en carga de estado visual.
+    }
+  }, [token]);
+
+  useEffect(() => {
+    void loadFavoriteIds();
+  }, [loadFavoriteIds]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadFavoriteIds();
+    }, [loadFavoriteIds])
   );
 
   useEffect(() => {
@@ -525,7 +557,6 @@ export default function StylensScreen() {
 
       const mappedProducts = mapBackendProducts(data.prendas_detectadas ?? []);
       setProducts(mappedProducts);
-      setFavorites([]);
       setScreenState("results");
     } catch (error) {
       const reason = toErrorMessage(error);
@@ -545,17 +576,15 @@ export default function StylensScreen() {
     }
   };
 
-  const handleAddFavorite = async (product: Product) => {
-    if (favorites.includes(product.id)) {
-      return;
-    }
-
+  const handleToggleFavorite = async (product: Product, isFavorite: boolean) => {
     if (!token) {
       Alert.alert("Inicia sesión", "Debes iniciar sesión para guardar favoritos.");
       return;
     }
 
-    if (typeof product.id !== "string" || product.id.trim().length === 0) {
+    const productId = typeof product.id === "string" ? product.id.trim() : "";
+
+    if (!productId) {
       Alert.alert(
         "No se pudo guardar",
         "Esta prenda no tiene un identificador válido para guardarse en favoritos."
@@ -563,22 +592,30 @@ export default function StylensScreen() {
       return;
     }
 
-    setFavoritePendingIds((prev) => [...prev, product.id]);
+    if (favoritePendingIds.includes(productId)) {
+      return;
+    }
+
+    setFavoritePendingIds((prev) => [...prev, productId]);
 
     try {
-      await apiClient.post(`/api/v1/favoritos/${product.id}`);
-      setFavorites((prev) => [...prev, product.id]);
+      if (isFavorite) {
+        await apiClient.delete(`/api/v1/favoritos/${productId}`);
+        setFavorites((prev) => prev.filter((id) => id !== productId));
+      } else {
+        await apiClient.post(`/api/v1/favoritos/${productId}`);
+        setFavorites((prev) => (prev.includes(productId) ? prev : [...prev, productId]));
+      }
     } catch (error) {
       const detail = getApiErrorDetail((error as { response?: { data?: BackendErrorPayload } })?.response?.data);
-      Alert.alert("No se pudo guardar", detail ?? toErrorMessage(error));
+      Alert.alert("No se pudo actualizar favoritos", detail ?? toErrorMessage(error));
     } finally {
-      setFavoritePendingIds((prev) => prev.filter((id) => id !== product.id));
+      setFavoritePendingIds((prev) => prev.filter((id) => id !== productId));
     }
   };
 
   const handleBackToSelect = () => {
     setProducts([]);
-    setFavorites([]);
     setScreenState("select");
   };
 
@@ -623,8 +660,9 @@ export default function StylensScreen() {
   };
 
   const renderProductCard = (product: Product, useMobileCard = false) => {
-    const isFavorite = favorites.includes(product.id);
-    const isFavoritePending = favoritePendingIds.includes(product.id);
+    const productId = String(product.id);
+    const isFavorite = favorites.includes(productId);
+    const isFavoritePending = favoritePendingIds.includes(productId);
 
     return (
       <TouchableOpacity
@@ -679,7 +717,7 @@ export default function StylensScreen() {
             disabled={isFavoritePending}
             onPress={(e) => {
               e.stopPropagation?.();
-              void handleAddFavorite(product);
+              void handleToggleFavorite(product, isFavorite);
             }}
           >
             {isFavoritePending ? (
