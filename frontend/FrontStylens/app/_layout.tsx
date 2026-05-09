@@ -62,6 +62,15 @@ export default function RootLayout() {
                 contentStyle: { backgroundColor: 'transparent' },
               }}
             />
+            <Stack.Screen
+              name="reset-password"
+              options={{
+                headerShown: false,
+                presentation: 'transparentModal',
+                animation: 'fade',
+                contentStyle: { backgroundColor: 'transparent' },
+              }}
+            />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>

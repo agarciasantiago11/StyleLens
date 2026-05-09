@@ -1,11 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Usuario, Role
+from app.models import Usuario, Role, AccessRequest
 from app.auth_deps import get_admin_user
 import bcrypt
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/user", tags=["Users Management"])
+
+
+class RegisterUserBody(BaseModel):
+    nombre_usuario: str
+    email: str
+    password: str
 
 
 @router.post("/")
@@ -30,6 +37,46 @@ def create_user(
     ))
     db.commit()
     return {"message": "Usuario creado con éxito"}
+
+
+@router.post("/register")
+def register_user(
+    body: RegisterUserBody,
+    db: Session = Depends(get_db),
+):
+    if db.query(Usuario).filter(Usuario.email == body.email).first():
+        raise HTTPException(status_code=400, detail="El email ya está registrado")
+
+    access_request = (
+        db.query(AccessRequest)
+        .filter(
+            AccessRequest.email == body.email,
+            AccessRequest.message == "register request",
+            AccessRequest.status == "pending",
+        )
+        .order_by(AccessRequest.created_at.desc())
+        .first()
+    )
+    if not access_request:
+        raise HTTPException(status_code=400, detail="No hay solicitud de registro validada para este email")
+
+    user_role = db.query(Role).filter(Role.id == 3).first()
+    if not user_role:
+        raise HTTPException(status_code=500, detail="No existe el rol user (id=3)")
+
+    hashed_pw = bcrypt.hashpw(body.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+    db.add(Usuario(
+        nombre_completo=body.nombre_usuario,
+        email=body.email,
+        password_hash=hashed_pw,
+        role_id=3,
+        is_active=True,
+    ))
+    access_request.status = "accepted"
+    db.commit()
+
+    return {"message": "Usuario registrado con éxito"}
 
 
 @router.get("/list")

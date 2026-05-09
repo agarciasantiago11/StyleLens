@@ -45,7 +45,7 @@ def send_access_request_email(email: str, message: str) -> None:
         raise RuntimeError("ADMIN_EMAIL no configurado en .env")
 
     msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"Nueva solicitud - {message}"
+    msg["Subject"] = f"Nueva solicitud - {message}"
     msg["From"] = SMTP_USER
     msg["To"] = ADMIN_EMAIL
 

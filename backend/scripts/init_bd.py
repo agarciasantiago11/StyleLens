@@ -4,8 +4,8 @@ Inicializa (o actualiza) la base de datos StyleLens:
   2. Elimina tablas legacy que ya no forman parte del modelo.
   3. Crea las tablas a partir de los modelos SQLAlchemy (idempotente):
        prendas, prendas_superiores, prendas_inferiores, cuerpo_entero,
-       roles, usuarios, favoritos. 
-  4. Garantiza que las columnas e índices de 'prendas' existen
+    roles, usuarios, requests, favoritos, busquedas, detecciones, resultados.
+  4. Garantiza que las columnas e índices de 'prendas' y 'requests' existen
      tanto en instalaciones nuevas como en bases de datos existentes.
 
 Uso:
@@ -38,14 +38,7 @@ _DROP_LEGACY_TABLES = [
     "DROP TABLE IF EXISTS public.camisetas  CASCADE",
     "DROP TABLE IF EXISTS public.pantalones CASCADE",
     "DROP TABLE IF EXISTS public.otros      CASCADE",
-]
-
-# Columnas que deben existir en public.prendas (ADD COLUMN IF NOT EXISTS es idempotente).
-# El embedding ya NO vive en esta tabla: reside en las subtablas JTI
-# (prendas_superiores, prendas_inferiores, cuerpo_entero).
-_ENSURE_USUARIOS_COLUMNS = [
-    "ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS otp_hash        TEXT",
-    "ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS otp_expiration  TIMESTAMPTZ",
+  "DROP TABLE IF EXISTS public.access_requests CASCADE",
 ]
 
 _ENSURE_PRENDAS_COLUMNS = [
@@ -62,6 +55,16 @@ _ENSURE_PRENDAS_COLUMNS = [
     "CREATE INDEX IF NOT EXISTS ix_prendas_imagen_hash ON public.prendas (imagen_hash)",
     "CREATE INDEX IF NOT EXISTS ix_prendas_categoria   ON public.prendas (categoria)",
 ]
+
+_ENSURE_REQUESTS_COLUMNS = [
+    "ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS email          TEXT",
+    "ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS message        TEXT",
+    "ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS created_at     TIMESTAMPTZ",
+    "ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS otp_hash       TEXT",
+    "ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS otp_expiration TIMESTAMPTZ",
+    "ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS status         TEXT",
+    "CREATE INDEX IF NOT EXISTS ix_requests_email ON public.requests (email)",
+  ]
 
 
 def main() -> None:
@@ -82,17 +85,30 @@ def main() -> None:
         models.Base.metadata.create_all(bind=engine)
         print("  ✓ Tablas creadas")
 
-        # 4. Asegurar columnas en usuarios (otp_hash, otp_expiration)
-        with engine.begin() as conn:
-            for stmt in _ENSURE_USUARIOS_COLUMNS:
-                conn.execute(text(stmt))
-        print("  ✓ Columnas OTP en usuarios verificadas")
-
-        # 5. Asegurar columnas e índices en prendas (necesario para bases de datos existentes)
+        # 4. Asegurar columnas e índices en prendas (necesario para bases de datos existentes)
         with engine.begin() as conn:
             for stmt in _ENSURE_PRENDAS_COLUMNS:
                 conn.execute(text(stmt))
         print("  ✓ Columnas e índices de prendas verificados")
+
+        # 5. Asegurar columnas e índices en requests (OTP vive aquí)
+        with engine.begin() as conn:
+          for stmt in _ENSURE_REQUESTS_COLUMNS:
+            conn.execute(text(stmt))
+          conn.execute(
+            text(
+              "ALTER TABLE public.requests "
+              "DROP CONSTRAINT IF EXISTS ck_requests_message_allowed"
+            )
+          )
+          conn.execute(
+            text(
+              "ALTER TABLE public.requests "
+              "ADD CONSTRAINT ck_requests_message_allowed "
+              "CHECK (message IN ('register request', 'change password'))"
+            )
+          )
+        print("  ✓ Columnas, índice y constraint de requests verificados")
 
         # 6. Índices HNSW sobre los embeddings de las subtablas.
         #    Permiten búsqueda vectorial por similitud de coseno en O(log n)

@@ -79,6 +79,11 @@ class OTPRequestBody(BaseModel):
     email: str
 
 
+class ChangePasswordBody(BaseModel):
+    email: str
+    new_password: str
+
+
 class VerifyOTPBody(BaseModel):
     email: str
     otp: str

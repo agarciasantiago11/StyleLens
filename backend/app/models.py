@@ -91,36 +91,6 @@ class Usuario(Base):
     is_active = Column(Boolean, default=True)
     token = Column(String)
     token_expiration = Column(DateTime)
-    otp_hash = Column(String, nullable=True)
-    otp_expiration = Column(DateTime, nullable=True)
-
-    def generate_otp(self) -> str:
-        otp = f"{secrets.randbelow(1_000_000):06d}"
-        self.otp_hash = hashlib.sha256(otp.encode()).hexdigest()
-        self.otp_expiration = datetime.now(timezone.utc) + timedelta(minutes=10)
-        return otp
-
-    def verify_otp(self, plain_otp: str) -> bool:
-        if not self.otp_hash or not self.otp_expiration:
-            return False
-
-        exp = self.otp_expiration
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
-
-        if exp < datetime.now(timezone.utc):
-            self.otp_hash = None
-            self.otp_expiration = None
-            return False
-
-        expected = hashlib.sha256(plain_otp.encode()).hexdigest()
-        # compare_digest previene timing attacks
-        if not secrets.compare_digest(expected, self.otp_hash):
-            return False
-
-        self.otp_hash = None
-        self.otp_expiration = None
-        return True
 
     busquedas = relationship("Busqueda", back_populates="usuario", cascade="all, delete-orphan")
 
@@ -183,10 +153,38 @@ class AccessRequest(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String, nullable=False, index=True)
     message = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     otp_hash = Column(String, nullable=True)
-    otp_expiration = Column(DateTime, nullable=True)
+    otp_expiration = Column(DateTime(timezone=True), nullable=True)
     status = Column(String, default="pending")  # pending | approved | rejected
+
+    def generate_otp(self) -> str:
+        otp = f"{secrets.randbelow(1_000_000):06d}"
+        self.otp_hash = hashlib.sha256(otp.encode()).hexdigest()
+        self.otp_expiration = datetime.now(timezone.utc) + timedelta(minutes=10)
+        return otp
+
+    def verify_otp(self, plain_otp: str) -> bool:
+        if not self.otp_hash or not self.otp_expiration:
+            return False
+
+        exp = self.otp_expiration
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+
+        if exp < datetime.now(timezone.utc):
+            self.otp_hash = None
+            self.otp_expiration = None
+            return False
+
+        expected = hashlib.sha256(plain_otp.encode()).hexdigest()
+        # compare_digest previene timing attacks
+        if not secrets.compare_digest(expected, self.otp_hash):
+            return False
+
+        self.otp_hash = None
+        self.otp_expiration = None
+        return True
 
 
 class Favorito(Base):

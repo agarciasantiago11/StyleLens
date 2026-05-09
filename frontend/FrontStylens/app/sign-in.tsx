@@ -86,6 +86,10 @@ export default function SignInPage() {
     router.push("/registro");
   };
 
+  const goToResetPassword = () => {
+    router.push("/reset-password" as any);
+  };
+
   return (
     <PublicOnlyRoute>
       <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.appBackground }]}> 
@@ -200,6 +204,12 @@ export default function SignInPage() {
                   <ThemedText style={[styles.buttonText, { color: headingColor }]}>Registrarse</ThemedText>
                 </TouchableOpacity>
               </View>
+
+              <ThemedText style={[styles.helpText, { color: bodyColor }]}>¿Problemas para iniciar sesión?</ThemedText>
+
+              <TouchableOpacity onPress={goToResetPassword} style={styles.forgotPasswordButton}>
+                <ThemedText style={[styles.forgotPasswordText, { color: theme.accent }]}>Reestablecer contraseña</ThemedText>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -290,6 +300,21 @@ const styles = StyleSheet.create({
   errorText: {
     marginBottom: 16,
     fontSize: 14,
+  },
+  forgotPasswordButton: {
+    alignSelf: "center",
+    marginTop: 6,
+    marginBottom: 16,
+  },
+  helpText: {
+    marginTop: 14,
+    fontSize: 13,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  forgotPasswordText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
   button: {
     borderRadius: 16,

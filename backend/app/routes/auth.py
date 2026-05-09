@@ -5,11 +5,12 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
 from app.models import Usuario, Role
-from app.schemas import UserMeResponse, OTPRequestBody, VerifyOTPBody, VerifyOTPResponse, UserBasicResponse, AccessRequestBody
-from app.auth_utils import verify_password, generate_token, create_access_token
+from app.schemas import UserMeResponse, OTPRequestBody, AccessRequestBody, ChangePasswordBody
+from app.auth_utils import verify_password, create_access_token
 from app.services.email_service import send_otp_email, send_access_request_email
 from app.models import AccessRequest
 from datetime import datetime, timedelta, timezone
+import bcrypt
 
 router = APIRouter()
 
@@ -120,53 +121,122 @@ def logout(
     return {"message": "Sesión cerrada correctamente"}
 
 
-@router.post("/request-otp")
-def request_otp(body: OTPRequestBody, request: Request, db: Session = Depends(get_db)):
+@router.post("/request-register-otp")
+def request_register_otp(body: OTPRequestBody, request: Request, db: Session = Depends(get_db)):
     _otp_request_limiter.check(request)
 
-    usuario = db.query(Usuario).filter(Usuario.email == body.email).first()
+    access_request = AccessRequest(
+        email=body.email,
+        message="register request",
+        status="pending",
+    )
+    db.add(access_request)
 
-    # Respuesta genérica para no revelar si el email existe (user enumeration)
-    if not usuario:
-        return {"message": "Si el email está registrado, recibirás un código OTP"}
-
-    otp = usuario.generate_otp()
+    otp = access_request.generate_otp()
     db.commit()
 
     try:
-        send_otp_email(usuario.email, otp)
+        send_otp_email(body.email, otp)
     except Exception as e:
         # Revertir campos OTP si el envío falla para no dejar estado inconsistente
-        usuario.otp_hash = None
-        usuario.otp_expiration = None
+        access_request.otp_hash = None
+        access_request.otp_expiration = None
         db.commit()
         raise HTTPException(status_code=500, detail=f"Error al enviar el email: {e}")
 
-    return {"message": "Si el email está registrado, recibirás un código OTP"}
+    return {"message": "Si el email es válido, recibirás un código OTP de registro"}
 
 
-@router.post("/verify-otp", response_model=VerifyOTPResponse)
-def verify_otp(body: VerifyOTPBody, request: Request, db: Session = Depends(get_db)):
-    _otp_verify_limiter.check(request)
+@router.post("/request-passwordset-otp")
+def request_passwordset_otp(body: OTPRequestBody, request: Request, db: Session = Depends(get_db)):
+    _otp_request_limiter.check(request)
 
-    usuario = db.query(Usuario).filter(Usuario.email == body.email).first()
+    access_request = AccessRequest(
+        email=body.email,
+        message="change password",
+        status="pending",
+    )
+    db.add(access_request)
 
-    if not usuario or not usuario.verify_otp(body.otp):
-        raise HTTPException(status_code=400, detail="OTP inválido o expirado")
-
-    token = generate_token()
-    usuario.token = token
-    usuario.token_expiration = datetime.now(timezone.utc) + timedelta(hours=1)
+    otp = access_request.generate_otp()
     db.commit()
 
-    return VerifyOTPResponse(
-        user=UserBasicResponse(
-            id=usuario.id,
-            email=usuario.email,
-            nombre_completo=usuario.nombre_completo,
-        ),
-        token=token,
+    try:
+        send_otp_email(body.email, otp)
+    except Exception as e:
+        access_request.otp_hash = None
+        access_request.otp_expiration = None
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Error al enviar el email: {e}")
+
+    return {"message": "Si el email es válido, recibirás un código OTP para reestablecer contraseña"}
+
+
+@router.get("/verify-otp")
+def verify_otp(
+    email: str,
+    request: Request,
+    message: str = "register request",
+    db: Session = Depends(get_db),
+):
+    _otp_verify_limiter.check(request)
+
+    if message not in {"register request", "change password"}:
+        raise HTTPException(status_code=400, detail="Tipo de verificación OTP no válido")
+
+    access_request = (
+        db.query(AccessRequest)
+        .filter(
+            AccessRequest.email == email,
+            AccessRequest.message == message,
+            AccessRequest.status == "pending",
+        )
+        .order_by(AccessRequest.created_at.desc())
+        .first()
     )
+
+    if not access_request or not access_request.otp_hash or not access_request.otp_expiration:
+        raise HTTPException(status_code=404, detail="No hay OTP de registro pendiente para este email")
+
+    expiration = access_request.otp_expiration
+    if expiration.tzinfo is None:
+        expiration = expiration.replace(tzinfo=timezone.utc)
+
+    return {
+        "otp_hash": access_request.otp_hash,
+        "otp_expiration": expiration.isoformat().replace("+00:00", "Z"),
+        "status": access_request.status,
+        "message": access_request.message,
+    }
+
+
+@router.put("/cambio-contrasena")
+def cambio_contrasena(body: ChangePasswordBody, db: Session = Depends(get_db)):
+    usuario = db.query(Usuario).filter(Usuario.email == body.email).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    access_request = (
+        db.query(AccessRequest)
+        .filter(
+            AccessRequest.email == body.email,
+            AccessRequest.message == "change password",
+            AccessRequest.status == "pending",
+        )
+        .order_by(AccessRequest.created_at.desc())
+        .first()
+    )
+    if not access_request:
+        raise HTTPException(status_code=400, detail="No hay solicitud de cambio de contraseña pendiente")
+
+    hashed_pw = bcrypt.hashpw(body.new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    usuario.password_hash = hashed_pw
+    access_request.status = "accepted"
+    access_request.otp_hash = None
+    access_request.otp_expiration = None
+    db.commit()
+
+    return {"message": "Contraseña actualizada correctamente"}
 
 
 @router.post("/request-access")

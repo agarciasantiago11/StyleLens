@@ -30,10 +30,24 @@ CREATE TABLE IF NOT EXISTS public.usuarios (
     role_id          INTEGER REFERENCES public.roles(id),
     is_active        BOOLEAN DEFAULT TRUE,
     token            TEXT,
-    token_expiration TIMESTAMP WITH TIME ZONE,
-    otp_hash         TEXT,
-    otp_expiration   TIMESTAMP WITH TIME ZONE
+    token_expiration TIMESTAMP WITH TIME ZONE
 );
+
+-- ============================================================
+-- 3.1 REQUESTS
+--    Solicitudes de registro/cambio de contraseña y OTP asociado.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.requests (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email          TEXT NOT NULL,
+    message        TEXT NOT NULL CHECK (message IN ('register request', 'change password')),
+    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    otp_hash       TEXT,
+    otp_expiration TIMESTAMP WITH TIME ZONE,
+    status         TEXT DEFAULT 'pending'
+);
+
+CREATE INDEX IF NOT EXISTS ix_requests_email ON public.requests (email);
 
 -- ============================================================
 -- 4. PRENDAS — tabla base (campos comunes)
