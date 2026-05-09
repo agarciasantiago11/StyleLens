@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS public.usuarios (
     is_active        BOOLEAN DEFAULT TRUE,
     token            TEXT,
     token_expiration TIMESTAMP WITH TIME ZONE,
+    otp_hash         TEXT,
+    otp_expiration   TIMESTAMP WITH TIME ZONE
 );
 
 -- ============================================================

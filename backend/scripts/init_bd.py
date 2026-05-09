@@ -82,6 +82,17 @@ def main() -> None:
         models.Base.metadata.create_all(bind=engine)
         print("  ✓ Tablas creadas")
 
+        # 3.1 Insertar roles si no existen
+        with engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO public.roles (nombre, prioridad) VALUES
+                    ('Admin',           100),
+                    ('Project Manager',  50),
+                    ('User',             10)
+                ON CONFLICT (nombre) DO NOTHING
+            """))
+        print("  ✓ Roles verificados (Admin, Project Manager, User)")
+
         # 4. Asegurar columnas en usuarios (otp_hash, otp_expiration)
         with engine.begin() as conn:
             for stmt in _ENSURE_USUARIOS_COLUMNS:
