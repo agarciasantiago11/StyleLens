@@ -73,6 +73,7 @@ def _procesar_recorte(
     bbox_w: float,
     bbox_h: float,
     imagen_hash_recorte: str,
+    deteccion_existente: Optional[Deteccion] = None,
 ) -> tuple[Deteccion, list[Prenda], bool]:
     """
     Gestiona un recorte individual: busca caché de Prenda, si no llama a SerpAPI,
@@ -116,17 +117,28 @@ def _procesar_recorte(
             db.add(prenda)
             prendas.append(prenda)
 
-    deteccion = Deteccion(
-        busqueda_id=busqueda_id,
-        clase=clase,
-        confianza=confianza,
-        bbox_x=bbox_x,
-        bbox_y=bbox_y,
-        bbox_w=bbox_w,
-        bbox_h=bbox_h,
-        recorte_url=recorte_url,
-    )
-    db.add(deteccion)
+    if deteccion_existente is not None:
+        deteccion = deteccion_existente
+        deteccion.clase = clase
+        deteccion.confianza = confianza
+        deteccion.bbox_x = bbox_x
+        deteccion.bbox_y = bbox_y
+        deteccion.bbox_w = bbox_w
+        deteccion.bbox_h = bbox_h
+        deteccion.recorte_url = recorte_url
+        db.add(deteccion)
+    else:
+        deteccion = Deteccion(
+            busqueda_id=busqueda_id,
+            clase=clase,
+            confianza=confianza,
+            bbox_x=bbox_x,
+            bbox_y=bbox_y,
+            bbox_w=bbox_w,
+            bbox_h=bbox_h,
+            recorte_url=recorte_url,
+        )
+        db.add(deteccion)
 
     # Garantiza PKs de deteccion/prendas antes de crear Resultados con FKs directas.
     db.flush()
@@ -145,26 +157,105 @@ def _procesar_recorte(
 @router.post("/detectar-cajas", response_model=DetectarCajasResponse)
 async def detectar_cajas(
     imagen: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     imagen_bytes = await imagen.read()
+    imagen_hash = hashlib.sha256(imagen_bytes).hexdigest()
 
     try:
-        cajas = yolo_service.detectar_cajas(imagen_bytes)
+        original_url = cloudinary_service.subir_imagen(
+            imagen_bytes, nombre=f"original_{imagen_hash[:16]}"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al subir imagen original: {str(e)}")
+
+    busqueda = Busqueda(
+        usuario_id=current_user.id,
+        imagen_original_url=original_url,
+        imagen_hash_original=imagen_hash,
+    )
+    db.add(busqueda)
+    db.commit()
+    db.refresh(busqueda)
+
+    try:
+        cajas_detectadas = yolo_service.detectar_cajas(imagen_bytes)
     except Exception as e:
         logger.warning("Fallo en deteccion YOLO para cajas, se usa fallback: %s", str(e))
-        cajas = []
+        cajas_detectadas = []
 
-    if not cajas:
-        cajas = [
+    if not cajas_detectadas:
+        cajas_detectadas = [
             {
-                "id": 0,
                 "clase": "unknown",
                 "confianza": 1.0,
                 "bbox": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
             }
         ]
 
-    return DetectarCajasResponse(prendas_detectadas=cajas, total=len(cajas))
+    cajas = []
+    for caja in cajas_detectadas:
+        bbox = caja.get("bbox") or {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
+
+        bbox_x = float(bbox.get("x", 0.0))
+        bbox_y = float(bbox.get("y", 0.0))
+        bbox_w = float(bbox.get("w", 1.0))
+        bbox_h = float(bbox.get("h", 1.0))
+
+        recorte_url = None
+        try:
+            recorte_bytes = yolo_service.recortar_por_bbox_normalizada(
+                imagen_bytes,
+                x=bbox_x,
+                y=bbox_y,
+                w=bbox_w,
+                h=bbox_h,
+            )
+            selector = f"{caja.get('clase', 'unknown')}|{bbox_x:.6f}|{bbox_y:.6f}|{bbox_w:.6f}|{bbox_h:.6f}".encode("utf-8")
+            recorte_hash = hashlib.sha256(imagen_bytes + selector).hexdigest()
+            recorte_url = cloudinary_service.subir_imagen(
+                recorte_bytes,
+                nombre=f"det_{recorte_hash[:16]}_{caja.get('clase', 'unknown')}",
+            )
+        except Exception as e:
+            logger.warning("No se pudo persistir recorte para deteccion en detectar-cajas: %s", str(e))
+
+        det = Deteccion(
+            busqueda_id=busqueda.id,
+            clase=caja.get("clase", "unknown"),
+            confianza=float(caja.get("confianza", 1.0)),
+            bbox_x=bbox_x,
+            bbox_y=bbox_y,
+            bbox_w=bbox_w,
+            bbox_h=bbox_h,
+            recorte_url=recorte_url,
+        )
+        db.add(det)
+        db.flush()
+
+        cajas.append(
+            {
+                "id": str(det.id),
+                "clase": det.clase or "unknown",
+                "confianza": float(det.confianza or 1.0),
+                "bbox": {
+                    "x": float(det.bbox_x or 0.0),
+                    "y": float(det.bbox_y or 0.0),
+                    "w": float(det.bbox_w or 1.0),
+                    "h": float(det.bbox_h or 1.0),
+                },
+            }
+        )
+
+    db.commit()
+    db.refresh(busqueda)
+
+    return DetectarCajasResponse(
+        prendas_detectadas=cajas,
+        total=len(cajas),
+        captura_id=busqueda.id,
+    )
 
 
 @router.post("/detectar", response_model=DetectarResponse)
@@ -315,6 +406,7 @@ async def detectar_prenda_individual(
     w: float = Form(...),
     h: float = Form(...),
     captura_id: Optional[str] = Form(None),
+    deteccion_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
@@ -354,6 +446,44 @@ async def detectar_prenda_individual(
         )
         db.add(busqueda)
 
+    deteccion_existente: Optional[Deteccion] = None
+    if deteccion_id:
+        try:
+            deteccion_uuid = UUID(deteccion_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="deteccion_id no es un UUID válido")
+
+        deteccion_existente = (
+            db.query(Deteccion)
+            .join(Busqueda, Busqueda.id == Deteccion.busqueda_id)
+            .filter(
+                Deteccion.id == deteccion_uuid,
+                Busqueda.usuario_id == current_user.id,
+            )
+            .first()
+        )
+        if not deteccion_existente:
+            raise HTTPException(status_code=404, detail="Detección no encontrada")
+
+        busqueda = deteccion_existente.busqueda
+        clase = deteccion_existente.clase or clase
+        x = float(deteccion_existente.bbox_x or x)
+        y = float(deteccion_existente.bbox_y or y)
+        w = float(deteccion_existente.bbox_w or w)
+        h = float(deteccion_existente.bbox_h or h)
+
+        if deteccion_existente.resultados:
+            prendas_existentes = [r.prenda for r in sorted(deteccion_existente.resultados, key=lambda r: r.rank or 0) if r.prenda]
+            return DetectarResponse(
+                captura_id=busqueda.id,
+                prendas_detectadas=[PrendaResponse.model_validate(p) for p in prendas_existentes],
+                total=len(prendas_existentes),
+                desde_cache=True,
+                detecciones_creadas=[
+                    DeteccionCreadaInfo(id=deteccion_existente.id, clase=deteccion_existente.clase, confianza=deteccion_existente.confianza)
+                ],
+            )
+
     selector = f"{clase}|{x:.6f}|{y:.6f}|{w:.6f}|{h:.6f}".encode("utf-8")
     imagen_hash = hashlib.sha256(imagen_bytes + selector).hexdigest()
 
@@ -375,6 +505,7 @@ async def detectar_prenda_individual(
         bbox_w=w,
         bbox_h=h,
         imagen_hash_recorte=imagen_hash,
+        deteccion_existente=deteccion_existente,
     )
 
     db.commit()

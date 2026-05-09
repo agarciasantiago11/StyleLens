@@ -61,7 +61,7 @@ type BackendBBox = {
 };
 
 type BackendDetectedBox = {
-  id: number;
+  id: string;
   clase: string;
   confianza: number;
   bbox: BackendBBox;
@@ -70,6 +70,7 @@ type BackendDetectedBox = {
 type DetectarCajasApiResponse = {
   prendas_detectadas?: BackendDetectedBox[];
   total?: number;
+  captura_id?: string;
 };
 
 type Product = {
@@ -90,7 +91,7 @@ type FavoritoApi = {
 };
 
 type SelectableBox = {
-  id: number;
+  id: string;
   clase: string;
   confianza: number;
   bbox: BackendBBox;
@@ -175,7 +176,7 @@ const buildImageFormData = async (selectedImageUri: string) => {
   return formData;
 };
 
-const detectarCajasConBackend = async (selectedImageUri: string) => {
+const detectarCajasConBackend = async (selectedImageUri: string, token?: string | null) => {
   const apiBaseCandidates = getApiBaseCandidates();
   const errors: string[] = [];
 
@@ -184,6 +185,7 @@ const detectarCajasConBackend = async (selectedImageUri: string) => {
       const formData = await buildImageFormData(selectedImageUri);
       const response = await fetch(`${apiBase}/api/v1/detectar-cajas`, {
         method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: formData,
       });
 
@@ -213,7 +215,9 @@ const detectarCajasConBackend = async (selectedImageUri: string) => {
 
 const detectarPrendaSeleccionadaConBackend = async (
   selectedImageUri: string,
-  box: SelectableBox
+  box: SelectableBox,
+  capturaId?: string | null,
+  token?: string | null
 ) => {
   const apiBaseCandidates = getApiBaseCandidates();
   const errors: string[] = [];
@@ -226,9 +230,14 @@ const detectarPrendaSeleccionadaConBackend = async (
       formData.append("y", String(box.bbox.y));
       formData.append("w", String(box.bbox.w));
       formData.append("h", String(box.bbox.h));
+      formData.append("deteccion_id", box.id);
+      if (capturaId) {
+        formData.append("captura_id", capturaId);
+      }
 
       const response = await fetch(`${apiBase}/api/v1/detectar-prenda`, {
         method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: formData,
       });
 
@@ -321,7 +330,8 @@ export default function StylensScreen() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [detectedBoxes, setDetectedBoxes] = useState<SelectableBox[]>([]);
-  const [selectedBoxId, setSelectedBoxId] = useState<number | null>(null);
+  const [currentCapturaId, setCurrentCapturaId] = useState<string | null>(null);
+  const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
   const [previewLayout, setPreviewLayout] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const [imageSize, setImageSize] = useState<{ width: number; height: number }>({ width: 1, height: 1 });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -347,34 +357,6 @@ export default function StylensScreen() {
         .then((value) => setHideTips(value === "true"))
         .catch(() => setHideTips(false));
     }, [])
-  );
-
-  const loadFavoriteIds = useCallback(async () => {
-    if (!token) {
-      setFavorites([]);
-      return;
-    }
-
-    try {
-      const { data } = await apiClient.get<FavoritoApi[]>("/api/v1/favoritos");
-      const ids = (data ?? [])
-        .map((item) => (item.prenda_id == null ? "" : String(item.prenda_id).trim()))
-        .filter((id): id is string => id.length > 0);
-
-      setFavorites(Array.from(new Set(ids)));
-    } catch {
-      // Evitamos alertas intrusivas en carga de estado visual.
-    }
-  }, [token]);
-
-  useEffect(() => {
-    void loadFavoriteIds();
-  }, [loadFavoriteIds]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadFavoriteIds();
-    }, [loadFavoriteIds])
   );
 
   useEffect(() => {
@@ -464,6 +446,7 @@ export default function StylensScreen() {
     setSelectedImage(null);
     setProducts([]);
     setDetectedBoxes([]);
+    setCurrentCapturaId(null);
     setSelectedBoxId(null);
     setPreviewLayout({ width: 0, height: 0 });
     setErrorMessage(null);
@@ -496,11 +479,12 @@ export default function StylensScreen() {
       requestTimeout.current = timeoutId;
 
       const data = await Promise.race([
-        detectarCajasConBackend(selectedImage),
+        detectarCajasConBackend(selectedImage, token),
         timeoutPromise,
       ]);
 
       const boxes = data.prendas_detectadas ?? [];
+      setCurrentCapturaId(data.captura_id ?? null);
       if (boxes.length === 0) {
         setErrorMessage("No se detectaron prendas en la imagen. Prueba con otra foto.");
         setScreenState("error");
@@ -551,7 +535,7 @@ export default function StylensScreen() {
       requestTimeout.current = timeoutId;
 
       const data = await Promise.race([
-        detectarPrendaSeleccionadaConBackend(selectedImage, box),
+        detectarPrendaSeleccionadaConBackend(selectedImage, box, currentCapturaId, token),
         timeoutPromise,
       ]);
 

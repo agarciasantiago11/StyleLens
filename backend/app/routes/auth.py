@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
 from app.models import Usuario, Role
-from app.schemas import UserMeResponse, OTPRequestBody, AccessRequestBody, ChangePasswordBody
+from app.schemas import UserMeResponse, OTPRequestBody, AccessRequestBody, ChangePasswordBody, VerifyOTPBody
 from app.auth_utils import verify_password, create_access_token
 from app.services.email_service import send_otp_email, send_access_request_email
 from app.models import AccessRequest
@@ -172,41 +172,42 @@ def request_passwordset_otp(body: OTPRequestBody, request: Request, db: Session 
     return {"message": "Si el email es válido, recibirás un código OTP para reestablecer contraseña"}
 
 
-@router.get("/verify-otp")
+@router.post("/verify-otp")
 def verify_otp(
-    email: str,
+    body: VerifyOTPBody,
     request: Request,
-    message: str = "register request",
     db: Session = Depends(get_db),
 ):
     _otp_verify_limiter.check(request)
 
-    if message not in {"register request", "change password"}:
+    if body.message not in {"register request", "change password"}:
         raise HTTPException(status_code=400, detail="Tipo de verificación OTP no válido")
 
     access_request = (
         db.query(AccessRequest)
         .filter(
-            AccessRequest.email == email,
-            AccessRequest.message == message,
+            AccessRequest.email == body.email,
+            AccessRequest.message == body.message,
             AccessRequest.status == "pending",
         )
         .order_by(AccessRequest.created_at.desc())
         .first()
     )
 
-    if not access_request or not access_request.otp_hash or not access_request.otp_expiration:
-        raise HTTPException(status_code=404, detail="No hay OTP de registro pendiente para este email")
+    if not access_request:
+        raise HTTPException(status_code=404, detail="No hay OTP pendiente para este email")
 
-    expiration = access_request.otp_expiration
-    if expiration.tzinfo is None:
-        expiration = expiration.replace(tzinfo=timezone.utc)
+    if not access_request.verify_otp(body.otp):
+        db.commit()
+        raise HTTPException(status_code=400, detail="OTP inválido o expirado")
+
+    access_request.status = "verified"
+    db.commit()
 
     return {
-        "otp_hash": access_request.otp_hash,
-        "otp_expiration": expiration.isoformat().replace("+00:00", "Z"),
         "status": access_request.status,
         "message": access_request.message,
+        "detail": "OTP verificado correctamente",
     }
 
 

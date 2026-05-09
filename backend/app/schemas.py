@@ -45,7 +45,7 @@ class BBoxResponse(BaseModel):
 
 
 class PrendaDetectadaBoxResponse(BaseModel):
-    id: int
+    id: UUID | str
     clase: str
     confianza: float
     bbox: BBoxResponse
@@ -54,6 +54,7 @@ class PrendaDetectadaBoxResponse(BaseModel):
 class DetectarCajasResponse(BaseModel):
     prendas_detectadas: list[PrendaDetectadaBoxResponse]
     total: int
+    captura_id: Optional[UUID] = None
 
 
 class BuscarResponse(BaseModel):

@@ -15,7 +15,6 @@ import { ThemedText } from "@/components/themed-text";
 import { useAppTheme } from "@/contexts/app-theme";
 import { PublicOnlyRoute } from "@/lib/auth-guards";
 import apiClient from "@/api/client";
-import * as Crypto from "expo-crypto";
 
 export default function RegistroPage() {
 	const router = useRouter();
@@ -75,7 +74,7 @@ export default function RegistroPage() {
 		setIsSubmitting(true);
 
 		try {
-			const verifyResponse = await apiClient.post("/api/v1/auth/verify-otp", {
+			await apiClient.post("/api/v1/auth/verify-otp", {
 				email: email.trim(),
 				otp: otp.trim(),
 				message: "register request",
