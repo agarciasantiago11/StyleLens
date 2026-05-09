@@ -172,22 +172,23 @@ def request_passwordset_otp(body: OTPRequestBody, request: Request, db: Session 
     return {"message": "Si el email es válido, recibirás un código OTP para reestablecer contraseña"}
 
 
-@router.post("/verify-otp")
+@router.get("/verify-otp")
 def verify_otp(
-    body: VerifyOTPBody,
+    email: str,
     request: Request,
+    message: str = "register request",
     db: Session = Depends(get_db),
 ):
     _otp_verify_limiter.check(request)
 
-    if body.message not in {"register request", "change password"}:
+    if message not in {"register request", "change password"}:
         raise HTTPException(status_code=400, detail="Tipo de verificación OTP no válido")
 
     access_request = (
         db.query(AccessRequest)
         .filter(
-            AccessRequest.email == body.email,
-            AccessRequest.message == body.message,
+            AccessRequest.email == email,
+            AccessRequest.message == message,
             AccessRequest.status == "pending",
         )
         .order_by(AccessRequest.created_at.desc())
@@ -195,28 +196,47 @@ def verify_otp(
     )
 
     if not access_request or not access_request.otp_hash or not access_request.otp_expiration:
-        raise HTTPException(status_code=404, detail="No hay OTP pendiente para este email")
+        raise HTTPException(status_code=404, detail="No hay OTP de registro pendiente para este email")
 
-    # Check expiration
     expiration = access_request.otp_expiration
     if expiration.tzinfo is None:
         expiration = expiration.replace(tzinfo=timezone.utc)
-    if datetime.now(timezone.utc) > expiration:
-        raise HTTPException(status_code=400, detail="El OTP ha expirado")
 
-    # Verify OTP
-    import hashlib
-    entered_hash = hashlib.sha256(body.otp.encode("utf-8")).hexdigest()
+    return {
+        "otp_hash": access_request.otp_hash,
+        "otp_expiration": expiration.isoformat().replace("+00:00", "Z"),
+        "status": access_request.status,
+        "message": access_request.message,
+    }
 
-    if entered_hash != access_request.otp_hash:
-        raise HTTPException(status_code=400, detail="OTP incorrecto")
 
-    # If correct, update status
-    access_request.status = "verified"
+@router.put("/cambio-contrasena")
+def cambio_contrasena(body: ChangePasswordBody, db: Session = Depends(get_db)):
+    usuario = db.query(Usuario).filter(Usuario.email == body.email).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    access_request = (
+        db.query(AccessRequest)
+        .filter(
+            AccessRequest.email == body.email,
+            AccessRequest.message == "change password",
+            AccessRequest.status == "pending",
+        )
+        .order_by(AccessRequest.created_at.desc())
+        .first()
+    )
+    if not access_request:
+        raise HTTPException(status_code=400, detail="No hay solicitud de cambio de contraseña pendiente")
+
+    hashed_pw = bcrypt.hashpw(body.new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    usuario.password_hash = hashed_pw
+    access_request.status = "accepted"
+    access_request.otp_hash = None
+    access_request.otp_expiration = None
     db.commit()
 
-    return {"message": "OTP verificado correctamente"}
-
+    return {"message": "Contraseña actualizada correctamente"}
 
 
 @router.post("/request-access")
