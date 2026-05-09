@@ -175,14 +175,13 @@ def request_access(body: AccessRequestBody, request: Request, db: Session = Depe
 
     access_request = AccessRequest(
         email=body.email,
-        name=body.name,
         message=body.message,
     )
     db.add(access_request)
     db.commit()
 
     try:
-        send_access_request_email(body.name, body.email, body.message or "")
+        send_access_request_email(body.email, body.message)
     except Exception as e:
         # La solicitud queda guardada en BD aunque falle el email al admin
         print(f"[WARN] No se pudo notificar al admin: {e}")

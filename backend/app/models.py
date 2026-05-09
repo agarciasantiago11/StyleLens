@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
@@ -172,13 +172,20 @@ class Resultado(Base):
 
 
 class AccessRequest(Base):
-    __tablename__ = "access_requests"
+    __tablename__ = "requests"
+    __table_args__ = (
+        CheckConstraint(
+            "message IN ('register request', 'change password')",
+            name="ck_requests_message_allowed",
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String, nullable=False, index=True)
-    name = Column(String, nullable=False)
-    message = Column(String, nullable=True)
+    message = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    otp_hash = Column(String, nullable=True)
+    otp_expiration = Column(DateTime, nullable=True)
     status = Column(String, default="pending")  # pending | approved | rejected
 
 

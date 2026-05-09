@@ -17,11 +17,6 @@ CREATE TABLE IF NOT EXISTS public.roles (
     prioridad INTEGER NOT NULL
 );
 
-INSERT INTO public.roles (nombre, prioridad) VALUES
-    ('Admin',           100),
-    ('Project Manager',  50),
-    ('User',             10)
-ON CONFLICT (nombre) DO NOTHING;
 
 -- ============================================================
 -- 3. USUARIOS

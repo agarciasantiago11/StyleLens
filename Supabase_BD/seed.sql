@@ -16,7 +16,18 @@ TRUNCATE public.resultados,
          public.prendas,
          public.usuarios
 CASCADE;
--- roles no se trunca: ya están insertados en schema.sql
+
+-- Normaliza posibles nombres previos y garantiza el catálogo actual de roles.
+UPDATE public.roles SET nombre = 'admin', prioridad = 100 WHERE lower(nombre) = 'admin';
+UPDATE public.roles SET nombre = 'manager', prioridad = 50 WHERE lower(nombre) IN ('project manager', 'manager');
+UPDATE public.roles SET nombre = 'user', prioridad = 10 WHERE lower(nombre) = 'user';
+
+INSERT INTO public.roles (nombre, prioridad) VALUES
+('admin', 100),
+('manager', 50),
+('user', 10)
+ON CONFLICT (nombre) DO UPDATE
+SET prioridad = EXCLUDED.prioridad;
 
 -- ==========================================================
 -- 2. USUARIOS DE PRUEBA
@@ -27,13 +38,13 @@ INSERT INTO public.usuarios (id, email, password_hash, nombre_completo, role_id,
  'admin@stylelens.com',
  '$2b$12$ZSaMLVcvPwrmCgQnoGyesO8lBL2u2NAjWlX6bpUfgE8OeygBwSGKS',
  'Admin StyleLens',
- (SELECT id FROM public.roles WHERE nombre = 'Admin'),
+ (SELECT id FROM public.roles WHERE nombre = 'admin'),
  TRUE),
 ('a0000000-0000-0000-0000-000000000002',
  'usuario@stylelens.com',
  '$2b$12$8KKYIVV1ECcmhO1RrCDr3ul2wdACzSXXeiV0HZOjZDrSnwh.HaDIW',
  'Usuario Test',
- (SELECT id FROM public.roles WHERE nombre = 'User'),
+ (SELECT id FROM public.roles WHERE nombre = 'user'),
  TRUE);
 
 -- ==========================================================

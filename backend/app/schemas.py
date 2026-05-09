@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 from uuid import UUID
 from datetime import datetime
 
@@ -72,8 +72,7 @@ class UserMeResponse(BaseModel):
 
 class AccessRequestBody(BaseModel):
     email: str
-    name: str
-    message: Optional[str] = None
+    message: Literal["register request", "change password"]
 
 
 class OTPRequestBody(BaseModel):

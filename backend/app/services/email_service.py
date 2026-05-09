@@ -40,28 +40,26 @@ def send_otp_email(to_email: str, otp: str) -> None:
         server.sendmail(SMTP_USER, to_email, msg.as_string())
 
 
-def send_access_request_email(name: str, email: str, message: str) -> None:
+def send_access_request_email(email: str, message: str) -> None:
     if not ADMIN_EMAIL:
         raise RuntimeError("ADMIN_EMAIL no configurado en .env")
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Nueva solicitud de acceso - {name}"
+        msg["Subject"] = f"Nueva solicitud - {message}"
     msg["From"] = SMTP_USER
     msg["To"] = ADMIN_EMAIL
 
     plain = (
-        f"Nueva solicitud de acceso a StyleLens:\n\n"
-        f"Nombre: {name}\n"
+                f"Nueva solicitud en StyleLens:\n\n"
         f"Email: {email}\n"
-        f"Mensaje: {message or 'Sin mensaje'}"
+                f"Tipo: {message}"
     )
     html = f"""
     <html><body>
-      <h2>StyleLens — Nueva solicitud de acceso</h2>
+            <h2>StyleLens — Nueva solicitud</h2>
       <table>
-        <tr><td><strong>Nombre:</strong></td><td>{name}</td></tr>
         <tr><td><strong>Email:</strong></td><td>{email}</td></tr>
-        <tr><td><strong>Mensaje:</strong></td><td>{message or 'Sin mensaje'}</td></tr>
+                <tr><td><strong>Tipo:</strong></td><td>{message}</td></tr>
       </table>
     </body></html>
     """

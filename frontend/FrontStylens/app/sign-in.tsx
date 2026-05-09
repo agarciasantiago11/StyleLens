@@ -82,6 +82,10 @@ export default function SignInPage() {
     }
   };
 
+  const goToRegister = () => {
+    router.push("/registro");
+  };
+
   return (
     <PublicOnlyRoute>
       <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.appBackground }]}> 
@@ -168,17 +172,34 @@ export default function SignInPage() {
                 </ThemedText>
               ) : null}
 
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: theme.accent }]}
-                onPress={handleLogin}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color={theme.onAccent} />
-                ) : (
-                  <ThemedText style={[styles.buttonText, { color: theme.onAccent }]}>Entrar</ThemedText>
-                )}
-              </TouchableOpacity>
+              <View style={styles.actionsRow}>
+                <TouchableOpacity
+                  style={[styles.button, styles.loginButton, { backgroundColor: theme.accent }]}
+                  onPress={handleLogin}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator color={theme.onAccent} />
+                  ) : (
+                    <ThemedText style={[styles.buttonText, { color: theme.onAccent }]}>Entrar</ThemedText>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    styles.registerButton,
+                    {
+                      backgroundColor: "rgba(255,255,255,0.40)",
+                      borderColor: inputBorder,
+                    },
+                  ]}
+                  onPress={goToRegister}
+                  disabled={isSubmitting}
+                >
+                  <ThemedText style={[styles.buttonText, { color: headingColor }]}>Registrarse</ThemedText>
+                </TouchableOpacity>
+              </View>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -274,6 +295,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: "center",
+  },
+  actionsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  loginButton: {
+    flex: 1,
+  },
+  registerButton: {
+    flex: 1,
+    borderWidth: 1,
   },
   buttonText: {
     fontSize: 16,
