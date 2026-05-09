@@ -90,37 +90,11 @@ export default function ResetPasswordPage() {
     setIsSubmitting(true);
 
     try {
-      const verifyResponse = await apiClient.get("/api/v1/auth/verify-otp", {
-        params: {
-          email: email.trim(),
-          message: "change password",
-        },
+      const verifyResponse = await apiClient.post("/api/v1/auth/verify-otp", {
+        email: email.trim(),
+        otp: otp.trim(),
+        message: "change password",
       });
-
-      const otpHash: string | undefined = verifyResponse.data?.otp_hash;
-      const otpExpiration: string | undefined = verifyResponse.data?.otp_expiration;
-
-      if (!otpHash || !otpExpiration) {
-        setErrorMessage("No se pudo validar el OTP.");
-        return;
-      }
-
-      const enteredHash = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        otp.trim(),
-      );
-
-      const isOtpEqual = enteredHash === otpHash;
-      const expirationInput = /Z$|[+-]\d{2}:\d{2}$/.test(otpExpiration)
-        ? otpExpiration
-        : `${otpExpiration}Z`;
-      const expirationMs = Date.parse(expirationInput);
-      const isOtpInTime = !Number.isNaN(expirationMs) && Date.now() < expirationMs;
-
-      if (!isOtpEqual || !isOtpInTime) {
-        setErrorMessage("OTP inválido o expirado.");
-        return;
-      }
 
       setStep("newPassword");
     } catch (error: unknown) {
@@ -144,7 +118,7 @@ export default function ResetPasswordPage() {
     setIsSubmitting(true);
 
     try {
-      await apiClient.put("/api/v1/auth/cambio-contrasena", {
+      await apiClient.put("/api/user/cambio-contrasena", {
         email: email.trim(),
         new_password: newPassword,
       });

@@ -1,12 +1,27 @@
 import hashlib
 import logging
+from typing import Optional
+from uuid import UUID
+
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.auth_deps import get_current_user
 from app.database import get_db
-from app.models import Prenda, PrendaSuperior, PrendaInferior, CuerpoEntero
+from app.models import (
+    Busqueda,
+    Deteccion,
+    Prenda,
+    PrendaSuperior,
+    PrendaInferior,
+    CuerpoEntero,
+    Resultado,
+    Usuario,
+)
 from app.schemas import (
     DetectarResponse,
     DetectarCajasResponse,
+    DeteccionCreadaInfo,
     PrendaResponse,
 )
 from app.services import cloudinary_service, serpapi_service, yolo_service
@@ -29,7 +44,6 @@ CLASES_YOLO = {
 
 _FALLBACK = {"categoria": "otros", "subcategoria": "otros"}
 
-# Mapea categoria → modelo SQLAlchemy para que JTI inserte en la subtabla correcta.
 _CATEGORIA_MODEL: dict[str, type[Prenda]] = {
     "prendas_superiores": PrendaSuperior,
     "prendas_inferiores": PrendaInferior,
@@ -48,55 +62,81 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _guardar_resultados_en_bd(
+def _procesar_recorte(
     db: Session,
-    imagen_hash: str,
-    clase: str,
+    busqueda_id: UUID,
     recorte_bytes: bytes,
-) -> list[Prenda]:
-    try:
-        nombre_cloud = f"{imagen_hash[:16]}_{clase}"
-        cloudinary_url = cloudinary_service.subir_imagen(recorte_bytes, nombre=nombre_cloud)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al subir imagen: {str(e)}")
-
-    try:
-        resultados = serpapi_service.buscar_por_imagen(cloudinary_url)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Error al consultar SerpAPI: {str(e)}")
-
+    clase: str,
+    confianza: float,
+    bbox_x: float,
+    bbox_y: float,
+    bbox_w: float,
+    bbox_h: float,
+    imagen_hash_recorte: str,
+) -> tuple[Deteccion, list[Prenda], bool]:
+    """
+    Gestiona un recorte individual: busca caché de Prenda, si no llama a SerpAPI,
+    crea Deteccion y Resultado records.
+    Retorna (deteccion, prendas, desde_cache).
+    """
     categoria, subcategoria = _map_clase(clase)
-    # Usa la subclase específica para que JTI inserte también en la subtabla correcta.
     modelo = _CATEGORIA_MODEL.get(categoria, Prenda)
 
-    prendas_guardadas: list[Prenda] = []
-    for r in resultados:
-        prenda = modelo(
-            nombre=r["nombre"],
-            categoria=categoria,
-            subcategoria=subcategoria,
-            tienda=r["tienda"],
-            precio=r["precio"],
-            imagen_url=r["imagen_url"],
-            link=r["link"],
-            imagen_hash=imagen_hash,
-            cloudinary_url=cloudinary_url,
-        )
-        db.add(prenda)
-        prendas_guardadas.append(prenda)
+    prendas_cache = db.query(Prenda).filter(Prenda.imagen_hash == imagen_hash_recorte).all()
+    desde_cache = bool(prendas_cache)
 
-    return prendas_guardadas
+    if prendas_cache:
+        recorte_url = prendas_cache[0].cloudinary_url or ""
+        prendas = prendas_cache
+    else:
+        nombre_cloud = f"{imagen_hash_recorte[:16]}_{clase}"
+        try:
+            recorte_url = cloudinary_service.subir_imagen(recorte_bytes, nombre=nombre_cloud)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error al subir imagen: {str(e)}")
 
+        try:
+            resultados_serp = serpapi_service.buscar_por_imagen(recorte_url)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Error al consultar SerpAPI: {str(e)}")
 
-def _build_detectar_response(prendas: list[Prenda], desde_cache: bool) -> DetectarResponse:
-    if not prendas:
-        return DetectarResponse(prendas_detectadas=[], total=0, desde_cache=desde_cache)
+        prendas = []
+        for r in resultados_serp:
+            prenda = modelo(
+                nombre=r["nombre"],
+                categoria=categoria,
+                subcategoria=subcategoria,
+                tienda=r["tienda"],
+                precio=r["precio"],
+                imagen_url=r["imagen_url"],
+                link=r["link"],
+                imagen_hash=imagen_hash_recorte,
+                cloudinary_url=recorte_url,
+            )
+            db.add(prenda)
+            prendas.append(prenda)
 
-    return DetectarResponse(
-        prendas_detectadas=[PrendaResponse.model_validate(p) for p in prendas],
-        total=len(prendas),
-        desde_cache=desde_cache,
+    deteccion = Deteccion(
+        busqueda_id=busqueda_id,
+        clase=clase,
+        confianza=confianza,
+        bbox_x=bbox_x,
+        bbox_y=bbox_y,
+        bbox_w=bbox_w,
+        bbox_h=bbox_h,
+        recorte_url=recorte_url,
     )
+    db.add(deteccion)
+
+    for rank, prenda in enumerate(prendas, start=1):
+        db.add(Resultado(
+            deteccion_id=deteccion.id,
+            prenda_id=prenda.id,
+            rank=rank,
+            fuente="cache" if desde_cache else "serpapi",
+        ))
+
+    return deteccion, prendas, desde_cache
 
 
 @router.post("/detectar-cajas", response_model=DetectarCajasResponse)
@@ -127,20 +167,80 @@ async def detectar_cajas(
 @router.post("/detectar", response_model=DetectarResponse)
 async def detectar_prendas(
     imagen: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     imagen_bytes = await imagen.read()
-
     imagen_hash = hashlib.sha256(imagen_bytes).hexdigest()
 
-    en_cache = db.query(Prenda).filter(Prenda.imagen_hash == imagen_hash).all()
-    if en_cache:
+    try:
+        original_url = cloudinary_service.subir_imagen(
+            imagen_bytes, nombre=f"original_{imagen_hash[:16]}"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al subir imagen original: {str(e)}")
+
+    busqueda = Busqueda(
+        usuario_id=current_user.id,
+        imagen_original_url=original_url,
+        imagen_hash_original=imagen_hash,
+    )
+    db.add(busqueda)
+
+    # Caché nivel 1: misma imagen ya procesada → clonar estructura de detecciones/resultados
+    busqueda_anterior = (
+        db.query(Busqueda)
+        .filter(
+            Busqueda.imagen_hash_original == imagen_hash,
+            Busqueda.id != busqueda.id,
+        )
+        .first()
+    )
+
+    if busqueda_anterior and busqueda_anterior.detecciones:
+        detecciones_creadas = []
+        all_prendas = []
+
+        for det_ant in busqueda_anterior.detecciones:
+            nueva_det = Deteccion(
+                busqueda_id=busqueda.id,
+                clase=det_ant.clase,
+                confianza=det_ant.confianza,
+                bbox_x=det_ant.bbox_x,
+                bbox_y=det_ant.bbox_y,
+                bbox_w=det_ant.bbox_w,
+                bbox_h=det_ant.bbox_h,
+                recorte_url=det_ant.recorte_url,
+            )
+            db.add(nueva_det)
+
+            for res_ant in det_ant.resultados:
+                db.add(Resultado(
+                    deteccion_id=nueva_det.id,
+                    prenda_id=res_ant.prenda_id,
+                    rank=res_ant.rank,
+                    similitud_score=res_ant.similitud_score,
+                    fuente="cache",
+                ))
+                if res_ant.prenda:
+                    all_prendas.append(res_ant.prenda)
+
+            detecciones_creadas.append(nueva_det)
+
+        db.commit()
+
         return DetectarResponse(
-            prendas_detectadas=[PrendaResponse.model_validate(p) for p in en_cache],
-            total=len(en_cache),
+            captura_id=busqueda.id,
+            prendas_detectadas=[PrendaResponse.model_validate(p) for p in all_prendas],
+            total=len(all_prendas),
             desde_cache=True,
+            detecciones_creadas=[
+                DeteccionCreadaInfo(id=d.id, clase=d.clase, confianza=d.confianza)
+                for d in detecciones_creadas
+            ],
         )
 
+    # Sin caché: YOLO + procesar cada recorte
     try:
         recortes = yolo_service.detectar_y_recortar(imagen_bytes)
     except Exception as e:
@@ -148,22 +248,56 @@ async def detectar_prendas(
         recortes = []
 
     if not recortes:
-        recortes = [{"bytes": imagen_bytes, "clase": "unknown", "confianza": 1.0}]
+        recortes = [{
+            "bytes": imagen_bytes,
+            "clase": "unknown",
+            "confianza": 1.0,
+            "bbox_x": 0.0, "bbox_y": 0.0, "bbox_w": 1.0, "bbox_h": 1.0,
+        }]
 
-    prendas_guardadas = []
+    detecciones_creadas = []
+    all_prendas = []
+
     for recorte in recortes:
-        prendas_guardadas.extend(
-            _guardar_resultados_en_bd(db, imagen_hash, recorte["clase"], recorte["bytes"])
-        )
+        clase = recorte["clase"]
+        bbox_x = recorte.get("bbox_x", 0.0)
+        bbox_y = recorte.get("bbox_y", 0.0)
+        bbox_w = recorte.get("bbox_w", 1.0)
+        bbox_h = recorte.get("bbox_h", 1.0)
 
-    if not prendas_guardadas:
-        return _build_detectar_response([], desde_cache=False)
+        # Hash único por recorte (compatible con detectar-prenda)
+        selector = f"{clase}|{bbox_x:.6f}|{bbox_y:.6f}|{bbox_w:.6f}|{bbox_h:.6f}".encode("utf-8")
+        recorte_hash = hashlib.sha256(imagen_bytes + selector).hexdigest()
+
+        deteccion, prendas, _ = _procesar_recorte(
+            db=db,
+            busqueda_id=busqueda.id,
+            recorte_bytes=recorte["bytes"],
+            clase=clase,
+            confianza=recorte.get("confianza", 1.0),
+            bbox_x=bbox_x,
+            bbox_y=bbox_y,
+            bbox_w=bbox_w,
+            bbox_h=bbox_h,
+            imagen_hash_recorte=recorte_hash,
+        )
+        detecciones_creadas.append(deteccion)
+        all_prendas.extend(prendas)
 
     db.commit()
-    for p in prendas_guardadas:
+    for p in all_prendas:
         db.refresh(p)
 
-    return _build_detectar_response(prendas_guardadas, desde_cache=False)
+    return DetectarResponse(
+        captura_id=busqueda.id,
+        prendas_detectadas=[PrendaResponse.model_validate(p) for p in all_prendas],
+        total=len(all_prendas),
+        desde_cache=False,
+        detecciones_creadas=[
+            DeteccionCreadaInfo(id=d.id, clase=d.clase, confianza=d.confianza)
+            for d in detecciones_creadas
+        ],
+    )
 
 
 @router.post("/detectar-prenda", response_model=DetectarResponse)
@@ -174,19 +308,48 @@ async def detectar_prenda_individual(
     y: float = Form(...),
     w: float = Form(...),
     h: float = Form(...),
+    captura_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     imagen_bytes = await imagen.read()
 
     if w <= 0 or h <= 0:
         raise HTTPException(status_code=422, detail="Las dimensiones de la bbox deben ser mayores a 0")
 
+    # Obtener o crear Busqueda
+    busqueda = None
+    if captura_id:
+        try:
+            captura_uuid = UUID(captura_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="captura_id no es un UUID válido")
+
+        busqueda = db.query(Busqueda).filter(
+            Busqueda.id == captura_uuid,
+            Busqueda.usuario_id == current_user.id,
+        ).first()
+        if not busqueda:
+            raise HTTPException(status_code=404, detail="Captura no encontrada")
+
+    if not busqueda:
+        imagen_hash_orig = hashlib.sha256(imagen_bytes).hexdigest()
+        try:
+            original_url = cloudinary_service.subir_imagen(
+                imagen_bytes, nombre=f"original_{imagen_hash_orig[:16]}"
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error al subir imagen original: {str(e)}")
+
+        busqueda = Busqueda(
+            usuario_id=current_user.id,
+            imagen_original_url=original_url,
+            imagen_hash_original=imagen_hash_orig,
+        )
+        db.add(busqueda)
+
     selector = f"{clase}|{x:.6f}|{y:.6f}|{w:.6f}|{h:.6f}".encode("utf-8")
     imagen_hash = hashlib.sha256(imagen_bytes + selector).hexdigest()
-
-    en_cache = db.query(Prenda).filter(Prenda.imagen_hash == imagen_hash).all()
-    if en_cache:
-        return _build_detectar_response(en_cache, desde_cache=True)
 
     try:
         recorte_bytes = yolo_service.recortar_por_bbox_normalizada(imagen_bytes, x=x, y=y, w=w, h=h)
@@ -195,12 +358,29 @@ async def detectar_prenda_individual(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al recortar la prenda: {str(e)}")
 
-    prendas_guardadas = _guardar_resultados_en_bd(db, imagen_hash, clase, recorte_bytes)
-    if not prendas_guardadas:
-        return _build_detectar_response([], desde_cache=False)
+    deteccion, prendas, desde_cache = _procesar_recorte(
+        db=db,
+        busqueda_id=busqueda.id,
+        recorte_bytes=recorte_bytes,
+        clase=clase,
+        confianza=1.0,
+        bbox_x=x,
+        bbox_y=y,
+        bbox_w=w,
+        bbox_h=h,
+        imagen_hash_recorte=imagen_hash,
+    )
 
     db.commit()
-    for p in prendas_guardadas:
+    for p in prendas:
         db.refresh(p)
 
-    return _build_detectar_response(prendas_guardadas, desde_cache=False)
+    return DetectarResponse(
+        captura_id=busqueda.id,
+        prendas_detectadas=[PrendaResponse.model_validate(p) for p in prendas],
+        total=len(prendas),
+        desde_cache=desde_cache,
+        detecciones_creadas=[
+            DeteccionCreadaInfo(id=deteccion.id, clase=deteccion.clase, confianza=deteccion.confianza)
+        ],
+    )

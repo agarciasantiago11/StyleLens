@@ -9,7 +9,12 @@ from app.services import cloudinary_service, serpapi_service
 router = APIRouter()
 
 
-@router.post("/buscar", response_model=BuscarResponse)
+@router.post(
+    "/buscar",
+    response_model=BuscarResponse,
+    deprecated=True,
+    description="DEPRECATED: Usa POST /detectar-prenda con captura_id opcional.",
+)
 async def buscar_prenda(
     imagen: UploadFile = File(...),
     db: Session = Depends(get_db)

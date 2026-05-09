@@ -75,38 +75,11 @@ export default function RegistroPage() {
 		setIsSubmitting(true);
 
 		try {
-			const verifyResponse = await apiClient.get("/api/v1/auth/verify-otp", {
-				params: { email: email.trim() },
+			const verifyResponse = await apiClient.post("/api/v1/auth/verify-otp", {
+				email: email.trim(),
+				otp: otp.trim(),
+				message: "register request",
 			});
-
-			const otpHash: string | undefined = verifyResponse.data?.otp_hash;
-			const otpExpiration: string | undefined = verifyResponse.data?.otp_expiration;
-
-			if (!otpHash || !otpExpiration) {
-				setErrorMessage("No se pudo validar el OTP de registro.");
-				return;
-			}
-
-			const enteredHash = await Crypto.digestStringAsync(
-				Crypto.CryptoDigestAlgorithm.SHA256,
-				otp.trim(),
-			);
-
-			const isOtpEqual = enteredHash === otpHash;
-			const expirationInput = /Z$|[+-]\d{2}:\d{2}$/.test(otpExpiration)
-				? otpExpiration
-				: `${otpExpiration}Z`;
-			const expirationMs = Date.parse(expirationInput);
-			if (Number.isNaN(expirationMs)) {
-				setErrorMessage("No se pudo interpretar la fecha de expiración del OTP.");
-				return;
-			}
-			const isOtpInTime = Date.now() < expirationMs;
-
-			if (!isOtpEqual || !isOtpInTime) {
-				setErrorMessage("OTP inválido o expirado.");
-				return;
-			}
 
 			await apiClient.post("/api/user/register", {
 				nombre_usuario: username.trim(),

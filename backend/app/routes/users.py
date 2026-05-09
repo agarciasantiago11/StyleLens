@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Usuario, Role, AccessRequest
 from app.auth_deps import get_admin_user
+from app.schemas import ChangePasswordBody
 import bcrypt
 from pydantic import BaseModel
 
@@ -52,13 +53,13 @@ def register_user(
         .filter(
             AccessRequest.email == body.email,
             AccessRequest.message == "register request",
-            AccessRequest.status == "pending",
+            AccessRequest.status == "verified",
         )
         .order_by(AccessRequest.created_at.desc())
         .first()
     )
     if not access_request:
-        raise HTTPException(status_code=400, detail="No hay solicitud de registro validada para este email")
+        raise HTTPException(status_code=400, detail="OTP no verificado o solicitud expirada")
 
     user_role = db.query(Role).filter(Role.id == 3).first()
     if not user_role:
@@ -122,3 +123,32 @@ def soft_delete_user(
     usuario.is_active = False
     db.commit()
     return {"message": "Usuario desactivado correctamente"}
+
+@router.put("/cambio-contrasena")
+def cambio_contrasena(body: ChangePasswordBody, db: Session = Depends(get_db)):
+    usuario = db.query(Usuario).filter(Usuario.email == body.email).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    access_request = (
+        db.query(AccessRequest)
+        .filter(
+            AccessRequest.email == body.email,
+            AccessRequest.message == "change password",
+            AccessRequest.status == "verified",
+        )
+        .order_by(AccessRequest.created_at.desc())
+        .first()
+    )
+    if not access_request:
+        raise HTTPException(status_code=400, detail="OTP no verificado o solicitud expirada")
+
+    hashed_pw = bcrypt.hashpw(body.new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    usuario.password_hash = hashed_pw
+    access_request.status = "accepted"
+    access_request.otp_hash = None
+    access_request.otp_expiration = None
+    db.commit()
+
+    return {"message": "Contraseña actualizada correctamente"}
+

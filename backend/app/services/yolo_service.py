@@ -165,6 +165,10 @@ def detectar_y_recortar(imagen_bytes: bytes) -> list[dict]:
             "bytes": recorte_bytes,
             "clase": det["clase"],
             "confianza": det["confianza"],
+            "bbox_x": round(x1 / img_w, 6),
+            "bbox_y": round(y1 / img_h, 6),
+            "bbox_w": round((x2 - x1) / img_w, 6),
+            "bbox_h": round((y2 - y1) / img_h, 6),
         })
 
     return recortes

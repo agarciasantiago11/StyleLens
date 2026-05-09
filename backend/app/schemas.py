@@ -21,10 +21,20 @@ class PrendaResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class DeteccionCreadaInfo(BaseModel):
+    id: UUID
+    clase: Optional[str] = None
+    confianza: Optional[float] = None
+
+    model_config = {"from_attributes": True}
+
+
 class DetectarResponse(BaseModel):
+    captura_id: UUID
     prendas_detectadas: list[PrendaResponse]
     total: int
     desde_cache: bool = False
+    detecciones_creadas: list[DeteccionCreadaInfo] = []
 
 
 class BBoxResponse(BaseModel):
@@ -87,6 +97,7 @@ class ChangePasswordBody(BaseModel):
 class VerifyOTPBody(BaseModel):
     email: str
     otp: str
+    message: str
 
 
 class UserBasicResponse(BaseModel):
@@ -100,3 +111,41 @@ class UserBasicResponse(BaseModel):
 class VerifyOTPResponse(BaseModel):
     user: UserBasicResponse
     token: str
+
+
+class CapturaResumenResponse(BaseModel):
+    id: UUID
+    imagen_original_url: Optional[str] = None
+    fecha: datetime
+    total_detecciones: int
+
+    model_config = {"from_attributes": True}
+
+
+class DeteccionDetalleResponse(BaseModel):
+    id: UUID
+    clase: Optional[str] = None
+    confianza: Optional[float] = None
+    bbox: Optional[BBoxResponse] = None
+    recorte_url: Optional[str] = None
+    total_resultados: int
+
+    model_config = {"from_attributes": True}
+
+
+class CapturaDetalleResponse(BaseModel):
+    id: UUID
+    imagen_original_url: Optional[str] = None
+    fecha: datetime
+    detecciones: list[DeteccionDetalleResponse]
+
+    model_config = {"from_attributes": True}
+
+
+class ResultadoDetalleResponse(BaseModel):
+    rank: Optional[int] = None
+    similitud_score: Optional[float] = None
+    fuente: Optional[str] = None
+    prenda: PrendaResponse
+
+    model_config = {"from_attributes": True}

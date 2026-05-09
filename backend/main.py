@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import detectar, auth, buscar, prendas, users, favoritos
+from app.routes import detectar, auth, buscar, prendas, users, favoritos, capturas
 from app.database import engine, Base
 
 # Crea las tablas nuevas si no existen todavía
@@ -21,6 +21,7 @@ app.include_router(prendas.router, prefix="/api/v1", tags=["prendas"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Autenticación"])
 app.include_router(users.router)
 app.include_router(favoritos.router, prefix="/api/v1", tags=["favoritos"])
+app.include_router(capturas.router, prefix="/api/v1", tags=["capturas"])
 
 
 @app.get("/")
