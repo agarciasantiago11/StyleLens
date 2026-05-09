@@ -128,6 +128,9 @@ def _procesar_recorte(
     )
     db.add(deteccion)
 
+    # Garantiza PKs de deteccion/prendas antes de crear Resultados con FKs directas.
+    db.flush()
+
     for rank, prenda in enumerate(prendas, start=1):
         db.add(Resultado(
             deteccion_id=deteccion.id,
@@ -213,6 +216,9 @@ async def detectar_prendas(
                 recorte_url=det_ant.recorte_url,
             )
             db.add(nueva_det)
+
+            # Garantiza PK de la deteccion clonada para enlazar Resultados.
+            db.flush()
 
             for res_ant in det_ant.resultados:
                 db.add(Resultado(
