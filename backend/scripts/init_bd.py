@@ -116,7 +116,7 @@ def main() -> None:
             text(
               "ALTER TABLE public.requests "
               "ADD CONSTRAINT ck_requests_message_allowed "
-              "CHECK (message IN ('register request', 'change password'))"
+              "CHECK (message IN ('register request', 'change password', 'reset 2fa'))"
             )
           )
         print("  ✓ Columnas, índice y constraint de requests verificados")

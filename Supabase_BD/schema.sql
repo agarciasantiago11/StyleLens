@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS public.usuarios (
 CREATE TABLE IF NOT EXISTS public.requests (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email          TEXT NOT NULL,
-    message        TEXT NOT NULL CHECK (message IN ('register request', 'change password')),
+    message        TEXT NOT NULL CHECK (message IN ('register request', 'change password', 'reset 2fa')),
     created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     otp_hash       TEXT,
     otp_expiration TIMESTAMP WITH TIME ZONE,

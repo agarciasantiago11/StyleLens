@@ -180,7 +180,7 @@ def verify_otp(
 ):
     _otp_verify_limiter.check(request)
 
-    if body.message not in {"register request", "change password"}:
+    if body.message not in {"register request", "change password", "reset 2fa"}:
         raise HTTPException(status_code=400, detail="Tipo de verificación OTP no válido")
 
     access_request = (

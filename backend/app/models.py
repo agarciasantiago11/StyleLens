@@ -145,7 +145,7 @@ class AccessRequest(Base):
     __tablename__ = "requests"
     __table_args__ = (
         CheckConstraint(
-            "message IN ('register request', 'change password')",
+            "message IN ('register request', 'change password', 'reset 2fa')",
             name="ck_requests_message_allowed",
         ),
     )

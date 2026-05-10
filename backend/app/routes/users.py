@@ -4,6 +4,7 @@ from app.database import get_db
 from app.models import Usuario, Role, AccessRequest
 from app.auth_deps import get_current_user
 from app.schemas import ChangePasswordBody, UserListItem, RoleResponse
+from app.services.email_service import send_otp_email
 import bcrypt
 from pydantic import BaseModel
 
@@ -181,6 +182,43 @@ def soft_delete_user(
     return {"message": "Usuario desactivado correctamente"}
 
 
+@router.post("/{user_id}/request-reset-2fa")
+def request_reset_2fa(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    current_role = _get_role_or_403(current_user, db, 50)
+
+    usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if current_role.prioridad < 100:
+        user_role = db.query(Role).filter(Role.id == usuario.role_id).first()
+        if user_role and user_role.prioridad >= current_role.prioridad:
+            raise HTTPException(status_code=403, detail="No puedes iniciar un reset de 2FA para usuarios con un rol igual o superior al tuyo")
+
+    access_request = AccessRequest(
+        email=usuario.email,
+        message="reset 2fa",
+        status="pending",
+    )
+    db.add(access_request)
+    otp = access_request.generate_otp()
+    db.commit()
+
+    try:
+        send_otp_email(usuario.email, otp)
+    except Exception as e:
+        access_request.otp_hash = None
+        access_request.otp_expiration = None
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Error al enviar el email: {e}")
+
+    return {"message": "OTP de reset de 2FA enviado al usuario"}
+
+
 @router.post("/{user_id}/reset-2fa")
 def reset_2fa(
     user_id: str,
@@ -198,17 +236,18 @@ def reset_2fa(
         if user_role and user_role.prioridad >= current_role.prioridad:
             raise HTTPException(status_code=403, detail="No puedes resetear el 2FA de usuarios con un rol igual o superior al tuyo")
 
-    # Invalidar todas las solicitudes OTP pendientes o verificadas de este usuario en requests
-    db.query(AccessRequest).filter(
-        AccessRequest.email == usuario.email,
-        AccessRequest.status.in_(["pending", "verified"]),
-    ).update({"status": "cancelled", "otp_hash": None, "otp_expiration": None}, synchronize_session=False)
+    # Registro histórico del reset — no se toca ningún registro anterior
+    db.add(AccessRequest(
+        email=usuario.email,
+        message="reset 2fa",
+        status="accepted",
+    ))
 
     # Forzar re-login limpiando el token de sesión
     usuario.token = None
     usuario.token_expiration = None
     db.commit()
-    return {"message": "OTP y sesión reseteados correctamente"}
+    return {"message": "2FA reseteado correctamente. El usuario deberá volver a autenticarse."}
 
 
 @router.put("/cambio-contrasena")
