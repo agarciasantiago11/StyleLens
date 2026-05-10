@@ -27,6 +27,7 @@ export default function TabLayout() {
       <Stack.Screen name="soporte" />
       <Stack.Screen name="contacto" />
       <Stack.Screen name="acerca" />
+      <Stack.Screen name="admin-panel" />
     </Stack>
   );
 }
