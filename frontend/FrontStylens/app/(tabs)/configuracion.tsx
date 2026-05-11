@@ -1,282 +1,263 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { ScreenShell } from "@/components/screen-shell";
 import { useAppTheme } from "@/contexts/app-theme";
+import apiClient from "@/api/client";
 
 const HIDE_TIPS_KEY = "stylelens.hide-recommendations";
+const SEARCH_PRICE_MIN_KEY = "stylelens.search.priceMin";
+const SEARCH_PRICE_MAX_KEY = "stylelens.search.priceMax";
 
 export default function ConfiguracionScreen() {
-  const [priceMin, setPriceMin] = useState("");
-  const [priceMax, setPriceMax] = useState("");
-  const [country, setCountry] = useState("España");
-  const [currency, setCurrency] = useState("EUR (€)");
-  const [aiSensitivity, setAiSensitivity] = useState("Media - Balanceado");
-  const [includeSimilar, setIncludeSimilar] = useState(true);
-
-  const [saveHistory, setSaveHistory] = useState(true);
-  const [shareForAi, setShareForAi] = useState(false);
-
-  const [priceAlerts, setPriceAlerts] = useState(true);
-  const [similarAlerts, setSimilarAlerts] = useState(false);
-  const [promoAlerts, setPromoAlerts] = useState(false);
-
-  const [language, setLanguage] = useState("Español");
-  const [fontSize, setFontSize] = useState("Mediano");
+  const router = useRouter();
   const { theme, themes, selectedThemeId, setSelectedThemeId } = useAppTheme();
 
-  const handleResetRecommendationsTips = async () => {
+  const [priceMin, setPriceMin] = useState("");
+  const [priceMax, setPriceMax] = useState("");
+  const [resetTipsChecked, setResetTipsChecked] = useState(false);
+  const [clearCacheChecked, setClearCacheChecked] = useState(false);
+  const [savedVisible, setSavedVisible] = useState(false);
+  const [deleteConfirmPending, setDeleteConfirmPending] = useState(false);
+  const [deletingHistory, setDeletingHistory] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [min, max] = await Promise.all([
+        AsyncStorage.getItem(SEARCH_PRICE_MIN_KEY),
+        AsyncStorage.getItem(SEARCH_PRICE_MAX_KEY),
+      ]);
+      if (min) setPriceMin(min);
+      if (max) setPriceMax(max);
+    })();
+  }, []);
+
+  const handleEliminarHistorial = async () => {
+    if (!deleteConfirmPending) {
+      setDeleteConfirmPending(true);
+      return;
+    }
+    setDeletingHistory(true);
     try {
-      await AsyncStorage.removeItem(HIDE_TIPS_KEY);
-      Alert.alert("Consejos", "Las recomendaciones volverán a mostrarse.");
+      await apiClient.delete("/api/v1/historial");
+      setDeleteConfirmPending(false);
+      Alert.alert("Historial", "Todo el historial ha sido eliminado.");
     } catch {
-      Alert.alert("Consejos", "No se pudo restablecer esta preferencia.");
+      Alert.alert("Error", "No se pudo eliminar el historial.");
+    } finally {
+      setDeletingHistory(false);
     }
   };
 
-  const ChoiceRow = ({
-    label,
-    selected,
-    onPress,
-  }: {
-    label: string;
-    selected: boolean;
-    onPress: () => void;
-  }) => (
-    <Pressable
-      onPress={onPress}
-      style={[
-        styles.choiceItem,
-        { borderColor: theme.border, backgroundColor: theme.surface },
-        selected && { borderColor: theme.accent, backgroundColor: theme.accentSoft },
-      ]}
-    >
-      <Text
-        style={[
-          styles.choiceItemText,
-          { color: theme.textSecondary },
-          selected && { color: theme.accent, fontWeight: "600" },
-        ]}
-      >
-        {label}
-      </Text>
-      {selected && <Ionicons name="checkmark-circle" size={18} color={theme.accent} />}
-    </Pressable>
-  );
+  const handleGuardarCambios = async () => {
+    try {
+      await AsyncStorage.setItem(SEARCH_PRICE_MIN_KEY, priceMin);
+      await AsyncStorage.setItem(SEARCH_PRICE_MAX_KEY, priceMax);
+
+      if (resetTipsChecked) {
+        await AsyncStorage.removeItem(HIDE_TIPS_KEY);
+        setResetTipsChecked(false);
+      }
+
+      if (clearCacheChecked) {
+        const keys = await AsyncStorage.getAllKeys();
+        const cacheKeys = keys.filter(
+          (k) => k.startsWith("stylelens.") && k !== "stylelens.theme.id"
+        );
+        if (cacheKeys.length > 0) {
+          await AsyncStorage.multiRemove(cacheKeys);
+        }
+        setClearCacheChecked(false);
+      }
+
+      setSavedVisible(true);
+      setTimeout(() => {
+        setSavedVisible(false);
+        router.replace("/(tabs)" as any);
+      }, 2000);
+    } catch {
+      Alert.alert("Error", "No se pudieron guardar los cambios.");
+    }
+  };
 
   return (
-    <ScreenShell title="Configuración">
-      <ScrollView contentContainerStyle={styles.stack}>
-        <View style={[styles.card, { backgroundColor: theme.surface }]}> 
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="search" size={18} color={theme.textPrimary} />
-            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Preferencias de búsqueda</Text>
-          </View>
-          <Text style={[styles.label, { color: theme.textSecondary }]}>Rango de precios</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              value={priceMin}
-              onChangeText={setPriceMin}
-              placeholder="Min"
-              keyboardType="numeric"
-              style={styles.input}
-              placeholderTextColor={theme.textMuted}
-            />
-            <TextInput
-              value={priceMax}
-              onChangeText={setPriceMax}
-              placeholder="Max"
-              keyboardType="numeric"
-              style={styles.input}
-              placeholderTextColor={theme.textMuted}
-            />
-          </View>
+    <View style={{ flex: 1 }}>
+      <ScreenShell title="Configuración">
 
-          <Text style={styles.label}>Ubicación/País</Text>
-          <View style={styles.choiceList}>
-            {["España", "México", "Argentina", "Colombia"].map((item) => (
-              <ChoiceRow
-                key={item}
-                label={item}
-                selected={country === item}
-                onPress={() => setCountry(item)}
+          {/* Preferencias de búsqueda */}
+          <View style={[styles.card, { backgroundColor: theme.surface }]}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="search" size={18} color={theme.textPrimary} />
+              <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Preferencias de búsqueda</Text>
+            </View>
+            <Text style={[styles.label, { color: theme.textSecondary }]}>Rango de precios</Text>
+            <View style={styles.inputRow}>
+              <TextInput
+                value={priceMin}
+                onChangeText={setPriceMin}
+                placeholder="Min"
+                keyboardType="numeric"
+                style={[styles.input, { borderColor: theme.border, color: theme.textPrimary }]}
+                placeholderTextColor={theme.textMuted}
               />
-            ))}
-          </View>
-
-          <Text style={styles.label}>Divisa preferida</Text>
-          <View style={styles.choiceList}>
-            {["EUR (€)", "USD ($)", "GBP (£)", "MXN ($)"].map((item) => (
-              <ChoiceRow
-                key={item}
-                label={item}
-                selected={currency === item}
-                onPress={() => setCurrency(item)}
+              <TextInput
+                value={priceMax}
+                onChangeText={setPriceMax}
+                placeholder="Max"
+                keyboardType="numeric"
+                style={[styles.input, { borderColor: theme.border, color: theme.textPrimary }]}
+                placeholderTextColor={theme.textMuted}
               />
-            ))}
-          </View>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: theme.surface }]}> 
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="bulb-outline" size={18} color={theme.textPrimary} />
-            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Configuración de IA</Text>
-          </View>
-          <Text style={[styles.label, { color: theme.textSecondary }]}>Sensibilidad de detección</Text>
-          <View style={styles.choiceList}>
-            {["Alta - Coincidencias exactas", "Media - Balanceado", "Baja - Más variaciones"].map((item) => (
-              <ChoiceRow
-                key={item}
-                label={item}
-                selected={aiSensitivity === item}
-                onPress={() => setAiSensitivity(item)}
-              />
-            ))}
-          </View>
-          <View style={styles.switchRow}>
-            <Text style={[styles.switchText, { color: theme.textSecondary }]}>Buscar productos similares además de idénticos</Text>
-            <Switch value={includeSimilar} onValueChange={setIncludeSimilar} />
-          </View>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: theme.surface }]}> 
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="shield-checkmark-outline" size={18} color={theme.textPrimary} />
-            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Privacidad y datos</Text>
-          </View>
-          <View style={styles.switchRow}>
-            <Text style={[styles.switchText, { color: theme.textSecondary }]}>Guardar historial de búsquedas</Text>
-            <Switch value={saveHistory} onValueChange={setSaveHistory} />
-          </View>
-          <View style={styles.switchRow}>
-            <Text style={[styles.switchText, { color: theme.textSecondary }]}>Compartir datos para mejorar IA</Text>
-            <Switch value={shareForAi} onValueChange={setShareForAi} />
-          </View>
-          <Pressable
-            style={styles.dangerButton}
-            onPress={() => Alert.alert("Historial", "Se ha eliminado todo el historial.")}
-          >
-            <Ionicons name="trash-outline" size={16} color="#dc2626" />
-            <Text style={styles.dangerText}>Eliminar todo el historial</Text>
-          </Pressable>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: theme.surface }]}> 
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="notifications-outline" size={18} color={theme.textPrimary} />
-            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Notificaciones</Text>
-          </View>
-          <View style={styles.switchRow}>
-            <Text style={[styles.switchText, { color: theme.textSecondary }]}>Alertas de precio en favoritos</Text>
-            <Switch value={priceAlerts} onValueChange={setPriceAlerts} />
-          </View>
-          <View style={styles.switchRow}>
-            <Text style={[styles.switchText, { color: theme.textSecondary }]}>Nuevos productos similares</Text>
-            <Switch value={similarAlerts} onValueChange={setSimilarAlerts} />
-          </View>
-          <View style={styles.switchRow}>
-            <Text style={[styles.switchText, { color: theme.textSecondary }]}>Ofertas y promociones</Text>
-            <Switch value={promoAlerts} onValueChange={setPromoAlerts} />
-          </View>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: theme.surface }]}> 
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="color-palette-outline" size={18} color={theme.textPrimary} />
-            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Apariencia</Text>
+            </View>
           </View>
 
-          <Text style={[styles.label, { color: theme.textSecondary }]}>Tema de color</Text>
-          <View style={styles.themeGrid}>
-            {themes.map((themeOption) => {
-              const selected = selectedThemeId === themeOption.id;
-              return (
+          {/* Privacidad y datos */}
+          <View style={[styles.card, { backgroundColor: theme.surface }]}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="shield-checkmark-outline" size={18} color={theme.textPrimary} />
+              <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Privacidad y datos</Text>
+            </View>
+            <Text style={[styles.infoText, { color: theme.textSecondary }]}>
+              Todos sus datos han sido registrados en la nube. Para eliminar su información pulse{" "}
+              <Text style={{ fontWeight: "700" }}>Eliminar todo el historial.</Text>
+            </Text>
+            {deleteConfirmPending ? (
+              <View style={styles.confirmRow}>
                 <Pressable
-                  key={themeOption.id}
-                  onPress={() => setSelectedThemeId(themeOption.id)}
+                  style={[styles.dangerButton, styles.confirmButton]}
+                  onPress={handleEliminarHistorial}
+                  disabled={deletingHistory}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#dc2626" />
+                  <Text style={styles.dangerText}>
+                    {deletingHistory ? "Eliminando..." : "Confirmar eliminación"}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={styles.cancelButton}
+                  onPress={() => setDeleteConfirmPending(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancelar</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable style={styles.dangerButton} onPress={handleEliminarHistorial}>
+                <Ionicons name="trash-outline" size={16} color="#dc2626" />
+                <Text style={styles.dangerText}>Eliminar todo el historial</Text>
+              </Pressable>
+            )}
+          </View>
+
+          {/* Apariencia */}
+          <View style={[styles.card, { backgroundColor: theme.surface }]}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="color-palette-outline" size={18} color={theme.textPrimary} />
+              <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Apariencia</Text>
+            </View>
+            <Text style={[styles.label, { color: theme.textSecondary }]}>Tema de color</Text>
+            <View style={styles.themeGrid}>
+              {themes.map((themeOption) => {
+                const selected = selectedThemeId === themeOption.id;
+                return (
+                  <Pressable
+                    key={themeOption.id}
+                    onPress={() => setSelectedThemeId(themeOption.id)}
+                    style={[
+                      styles.themeCard,
+                      { borderColor: theme.border, backgroundColor: theme.surface },
+                      selected && { borderColor: theme.accent, backgroundColor: theme.accentSoft },
+                    ]}
+                  >
+                    <View style={styles.themeSwatchRow}>
+                      <View style={[styles.themeSwatch, { backgroundColor: themeOption.colors[0] }]} />
+                      <View style={[styles.themeSwatch, { backgroundColor: themeOption.colors[1] }]} />
+                    </View>
+                    <Text style={[styles.themeName, { color: theme.textSecondary }]}>{themeOption.name}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Avanzado */}
+          <View style={[styles.card, { backgroundColor: theme.surface }]}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="settings-outline" size={18} color={theme.textPrimary} />
+              <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Avanzado</Text>
+            </View>
+            <Pressable
+              style={[
+                styles.secondaryButton,
+                resetTipsChecked && { borderColor: theme.accent, backgroundColor: theme.accentSoft },
+              ]}
+              onPress={() => setResetTipsChecked((v) => !v)}
+            >
+              <View style={styles.buttonRow}>
+                <Text
                   style={[
-                    styles.themeCard,
-                    { borderColor: theme.border, backgroundColor: theme.surface },
-                    selected && { borderColor: theme.accent, backgroundColor: theme.accentSoft },
+                    styles.secondaryButtonText,
+                    resetTipsChecked && { color: theme.accent, fontWeight: "600" },
                   ]}
                 >
-                  <View style={styles.themeSwatchRow}>
-                    <View style={[styles.themeSwatch, { backgroundColor: themeOption.colors[0] }]} />
-                    <View style={[styles.themeSwatch, { backgroundColor: themeOption.colors[1] }]} />
-                  </View>
-                  <Text style={[styles.themeName, { color: theme.textSecondary }]}>{themeOption.name}</Text>
-                </Pressable>
-              );
-            })}
+                  Restablecer consejos de recomendaciones
+                </Text>
+                {resetTipsChecked && (
+                  <Ionicons name="checkmark-circle" size={18} color={theme.accent} />
+                )}
+              </View>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.secondaryButton,
+                clearCacheChecked && { borderColor: theme.accent, backgroundColor: theme.accentSoft },
+              ]}
+              onPress={() => setClearCacheChecked((v) => !v)}
+            >
+              <View style={styles.buttonRow}>
+                <Text
+                  style={[
+                    styles.secondaryButtonText,
+                    clearCacheChecked && { color: theme.accent, fontWeight: "600" },
+                  ]}
+                >
+                  Limpiar caché
+                </Text>
+                {clearCacheChecked && (
+                  <Ionicons name="checkmark-circle" size={18} color={theme.accent} />
+                )}
+              </View>
+            </Pressable>
           </View>
 
-          <Text style={[styles.label, { color: theme.textSecondary }]}>Idioma</Text>
-          <View style={styles.choiceList}>
-            {["Español", "English", "Français"].map((item) => (
-              <ChoiceRow
-                key={item}
-                label={item}
-                selected={language === item}
-                onPress={() => setLanguage(item)}
-              />
-            ))}
-          </View>
-
-          <Text style={[styles.label, { color: theme.textSecondary }]}>Tamaño de fuente</Text>
-          <View style={styles.choiceList}>
-            {["Pequeño", "Mediano", "Grande"].map((item) => (
-              <ChoiceRow
-                key={item}
-                label={item}
-                selected={fontSize === item}
-                onPress={() => setFontSize(item)}
-              />
-            ))}
-          </View>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: theme.surface }]}> 
-          <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Avanzado</Text>
           <Pressable
-            style={styles.secondaryButton}
-            onPress={handleResetRecommendationsTips}
+            style={[styles.saveButton, { backgroundColor: theme.accent }]}
+            onPress={handleGuardarCambios}
           >
-            <Text style={styles.secondaryButtonText}>Restablecer consejos de recomendaciones</Text>
+            <Text style={styles.saveButtonText}>Guardar cambios</Text>
           </Pressable>
-          <Pressable
-            style={styles.secondaryButton}
-            onPress={() => Alert.alert("Caché", "Caché limpiada correctamente.")}
-          >
-            <Text style={styles.secondaryButtonText}>Limpiar caché</Text>
-          </Pressable>
-        </View>
 
-        <Pressable
-          style={[styles.saveButton, { backgroundColor: theme.accent }]}
-          onPress={() => Alert.alert("Configuración", "Cambios guardados.")}
-        >
-          <Text style={styles.saveButtonText}>Guardar cambios</Text>
-        </Pressable>
-      </ScrollView>
-    </ScreenShell>
+      </ScreenShell>
+
+      {savedVisible && (
+        <View style={[styles.savedBanner, { backgroundColor: theme.accent }]}>
+          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+          <Text style={styles.savedBannerText}>Cambios guardados correctamente</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  stack: {
-    gap: 12,
-    paddingBottom: 24,
-  },
   card: {
     backgroundColor: "#fff",
     borderRadius: 18,
@@ -305,6 +286,11 @@ const styles = StyleSheet.create({
     color: "#374151",
     marginTop: 2,
   },
+  infoText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#374151",
+  },
   inputRow: {
     flexDirection: "row",
     gap: 10,
@@ -318,46 +304,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: "#111",
-  },
-  choiceList: {
-    gap: 8,
-  },
-  choiceItem: {
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 12,
-    backgroundColor: "#fff",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  choiceItemSelected: {
-    borderColor: "#c4b5fd",
-    backgroundColor: "#f5f3ff",
-  },
-  choiceItemText: {
-    color: "#374151",
-    fontSize: 14,
-    flex: 1,
-  },
-  choiceItemTextSelected: {
-    color: "#5b21b6",
-    fontWeight: "600",
-  },
-  switchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  switchText: {
-    flex: 1,
-    color: "#374151",
-    fontSize: 14,
-    lineHeight: 20,
   },
   dangerButton: {
     marginTop: 2,
@@ -375,6 +321,27 @@ const styles = StyleSheet.create({
     color: "#dc2626",
     fontWeight: "600",
   },
+  confirmRow: {
+    gap: 8,
+    marginTop: 2,
+  },
+  confirmButton: {
+    marginTop: 0,
+  },
+  cancelButton: {
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    backgroundColor: "#f9fafb",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  cancelButtonText: {
+    color: "#374151",
+    fontSize: 14,
+    fontWeight: "500",
+  },
   themeGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -388,10 +355,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     padding: 10,
     gap: 8,
-  },
-  themeCardSelected: {
-    borderColor: "#a78bfa",
-    backgroundColor: "#faf5ff",
   },
   themeSwatchRow: {
     flexDirection: "row",
@@ -418,6 +381,13 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: "#374151",
     fontSize: 14,
+    flex: 1,
+  },
+  buttonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
   },
   saveButton: {
     marginTop: 2,
@@ -431,5 +401,29 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 15,
     fontWeight: "700",
+  },
+  savedBanner: {
+    position: "absolute",
+    bottom: 100,
+    left: 20,
+    right: 20,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 10,
+    zIndex: 999,
+  },
+  savedBannerText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+    flex: 1,
   },
 });

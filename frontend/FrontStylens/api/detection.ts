@@ -1,6 +1,10 @@
 import { Platform } from "react-native";
 import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient from "./client";
+
+const SEARCH_PRICE_MIN_KEY = "stylelens.search.priceMin";
+const SEARCH_PRICE_MAX_KEY = "stylelens.search.priceMax";
 
 export type BackendBBox = {
   x: number;
@@ -128,6 +132,13 @@ export async function detectarPrenda(
   if (capturaId) {
     formData.append("captura_id", capturaId);
   }
+
+  const [priceMin, priceMax] = await Promise.all([
+    AsyncStorage.getItem(SEARCH_PRICE_MIN_KEY),
+    AsyncStorage.getItem(SEARCH_PRICE_MAX_KEY),
+  ]);
+  if (priceMin) formData.append("price_min", priceMin);
+  if (priceMax) formData.append("price_max", priceMax);
 
   try {
     const { data } = await apiClient.post<DetectarApiResponse>(

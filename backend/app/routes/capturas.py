@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.auth_deps import get_current_user
 from app.database import get_db
-from app.models import Busqueda, Deteccion, Resultado, Usuario
+from app.models import Busqueda, Deteccion, Favorito, Resultado, Usuario
 from app.schemas import (
     BBoxResponse,
     CapturaDetalleResponse,
@@ -17,6 +17,16 @@ from app.schemas import (
 )
 
 router = APIRouter()
+
+
+@router.delete("/historial", status_code=204)
+def eliminar_historial(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    db.query(Favorito).filter(Favorito.usuario_id == current_user.id).delete(synchronize_session=False)
+    db.query(Busqueda).filter(Busqueda.usuario_id == current_user.id).delete(synchronize_session=False)
+    db.commit()
 
 
 def _rank_or_last(r: Resultado) -> int:

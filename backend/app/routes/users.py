@@ -17,6 +17,13 @@ class RegisterUserBody(BaseModel):
     password: str
 
 
+class CreateUserBody(BaseModel):
+    nombre_completo: str
+    email: str
+    password_inicial: str
+    role_id: int
+
+
 def _get_role_or_403(user: Usuario, db: Session, min_priority: int) -> Role:
     role = db.query(Role).filter(Role.id == user.role_id).first()
     if not role or role.prioridad < min_priority:

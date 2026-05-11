@@ -75,6 +75,8 @@ def _procesar_recorte(
     bbox_h: float,
     imagen_hash_recorte: str,
     deteccion_existente: Optional[Deteccion] = None,
+    price_min: Optional[float] = None,
+    price_max: Optional[float] = None,
 ) -> tuple[Deteccion, list[Prenda], bool]:
     """
     Gestiona un recorte individual: busca caché de Prenda, si no llama a SerpAPI,
@@ -84,12 +86,20 @@ def _procesar_recorte(
     categoria, subcategoria = _map_clase(clase)
     modelo = _CATEGORIA_MODEL.get(categoria, Prenda)
 
-    prendas_cache = db.query(Prenda).filter(Prenda.imagen_hash == imagen_hash_recorte).all()
-    desde_cache = bool(prendas_cache)
+    prendas_all = db.query(Prenda).filter(Prenda.imagen_hash == imagen_hash_recorte).all()
+    desde_cache = bool(prendas_all)
 
-    if prendas_cache:
-        recorte_url = prendas_cache[0].cloudinary_url or ""
-        prendas = prendas_cache
+    if prendas_all:
+        recorte_url = prendas_all[0].cloudinary_url or ""
+        if price_min is not None or price_max is not None:
+            q = db.query(Prenda).filter(Prenda.imagen_hash == imagen_hash_recorte)
+            if price_min is not None:
+                q = q.filter(Prenda.precio >= price_min)
+            if price_max is not None:
+                q = q.filter(Prenda.precio <= price_max)
+            prendas = q.all()
+        else:
+            prendas = prendas_all
     else:
         nombre_cloud = f"{imagen_hash_recorte[:16]}_{clase}"
         try:
@@ -104,12 +114,17 @@ def _procesar_recorte(
 
         prendas = []
         for r in resultados_serp:
+            precio = r["precio"]
+            if price_min is not None and precio is not None and precio < price_min:
+                continue
+            if price_max is not None and precio is not None and precio > price_max:
+                continue
             prenda = modelo(
                 nombre=r["nombre"],
                 categoria=categoria,
                 subcategoria=subcategoria,
                 tienda=r["tienda"],
-                precio=r["precio"],
+                precio=precio,
                 imagen_url=r["imagen_url"],
                 link=r["link"],
                 imagen_hash=imagen_hash_recorte,
@@ -196,7 +211,7 @@ async def detectar_cajas(
         # Flush para que busqueda.id quede poblado antes de usarlo como FK.
         db.flush()
 
-        cajas = []
+        nuevas_dets = []
         for det_ant in busqueda_anterior.detecciones:
             nueva_det = Deteccion(
                 busqueda_id=busqueda.id,
@@ -209,8 +224,12 @@ async def detectar_cajas(
                 recorte_url=det_ant.recorte_url,
             )
             db.add(nueva_det)
-            cajas.append(_serializar_caja_detectada(nueva_det))
+            nuevas_dets.append(nueva_det)
 
+        # Flush antes de serializar para que SQLAlchemy asigne los UUIDs (default=uuid.uuid4
+        # se evalúa al hacer el INSERT, no al crear el objeto).
+        db.flush()
+        cajas = [_serializar_caja_detectada(d) for d in nuevas_dets]
         db.commit()
         return DetectarCajasResponse(
             prendas_detectadas=cajas,
@@ -249,7 +268,7 @@ async def detectar_cajas(
             }
         ]
 
-    cajas = []
+    dets_nuevas = []
     for caja in cajas_detectadas:
         bbox = caja.get("bbox") or {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
 
@@ -287,8 +306,11 @@ async def detectar_cajas(
             recorte_url=recorte_url,
         )
         db.add(det)
-        cajas.append(_serializar_caja_detectada(det))
+        dets_nuevas.append(det)
 
+    # Flush antes de serializar para que SQLAlchemy asigne los UUIDs.
+    db.flush()
+    cajas = [_serializar_caja_detectada(d) for d in dets_nuevas]
     db.commit()
 
     return DetectarCajasResponse(
@@ -449,6 +471,8 @@ async def detectar_prenda_individual(
     h: float = Form(...),
     captura_id: Optional[str] = Form(None),
     deteccion_id: Optional[str] = Form(None),
+    price_min: Optional[float] = Form(None),
+    price_max: Optional[float] = Form(None),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
@@ -564,6 +588,8 @@ async def detectar_prenda_individual(
         bbox_h=h,
         imagen_hash_recorte=imagen_hash,
         deteccion_existente=deteccion_existente,
+        price_min=price_min,
+        price_max=price_max,
     )
 
     db.commit()
