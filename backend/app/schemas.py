@@ -150,3 +150,23 @@ class ResultadoDetalleResponse(BaseModel):
     prenda: PrendaResponse
 
     model_config = {"from_attributes": True}
+
+
+class RoleResponse(BaseModel):
+    id: int
+    nombre: str
+    prioridad: int
+
+    model_config = {"from_attributes": True}
+
+
+class UserListItem(BaseModel):
+    id: UUID | str
+    email: str
+    nombre_completo: str | None = None
+    role_id: int | None = None
+    role_nombre: str | None = None
+    role_prioridad: int = 0
+    is_active: bool = True
+
+    model_config = {"from_attributes": True}

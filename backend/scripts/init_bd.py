@@ -85,6 +85,17 @@ def main() -> None:
         models.Base.metadata.create_all(bind=engine)
         print("  ✓ Tablas creadas")
 
+        # 3.1 Insertar roles si no existen
+        with engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO public.roles (nombre, prioridad) VALUES
+                    ('Admin',           100),
+                    ('Project Manager',  50),
+                    ('User',             10)
+                ON CONFLICT (nombre) DO NOTHING
+            """))
+        print("  ✓ Roles verificados (Admin, Project Manager, User)")
+
         # 4. Asegurar columnas e índices en prendas (necesario para bases de datos existentes)
         with engine.begin() as conn:
             for stmt in _ENSURE_PRENDAS_COLUMNS:
@@ -105,7 +116,7 @@ def main() -> None:
             text(
               "ALTER TABLE public.requests "
               "ADD CONSTRAINT ck_requests_message_allowed "
-              "CHECK (message IN ('register request', 'change password'))"
+              "CHECK (message IN ('register request', 'change password', 'reset 2fa'))"
             )
           )
         print("  ✓ Columnas, índice y constraint de requests verificados")

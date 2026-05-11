@@ -15,15 +15,25 @@ import { useAppTheme } from "@/contexts/app-theme";
 import { useAuthStore } from "@/store/authStore";
 import apiClient from "@/api/client";
 
+const ADMIN_PRIORITY = 100;
+
 const SIDEBAR_WIDTH = 300;
 
-const MENU_ITEMS: { icon: keyof typeof Ionicons.glyphMap; label: string; href: string }[] = [
+type MenuItem = {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  href: string;
+  adminOnly?: boolean;
+};
+
+const MENU_ITEMS: MenuItem[] = [
   { icon: "time-outline", label: "Capturas anteriores", href: "/(tabs)/capturas" },
   { icon: "star-outline", label: "Favoritos", href: "/(tabs)/favoritos" },
   { icon: "settings-outline", label: "Configuración", href: "/(tabs)/configuracion" },
   { icon: "headset-outline", label: "Soporte", href: "/(tabs)/soporte" },
   { icon: "mail-outline", label: "Contacto", href: "/(tabs)/contacto" },
   { icon: "information-circle-outline", label: "Acerca de", href: "/(tabs)/acerca" },
+  { icon: "shield-checkmark-outline", label: "Panel de Administrador", href: "/(tabs)/admin-panel", adminOnly: true },
 ];
 
 export default function Sidebar({
@@ -36,6 +46,8 @@ export default function Sidebar({
   const router = useRouter();
   const { theme } = useAppTheme();
   const logout = useAuthStore((state) => state.logout);
+  const user = useAuthStore((state) => state.user);
+  const isAdmin = (user?.role_priority ?? 0) >= ADMIN_PRIORITY;
 
   const handleLogout = async () => {
     try {
@@ -100,17 +112,33 @@ export default function Sidebar({
 
             {/* Menu Items */}
             <View style={styles.menuList}>
-              {MENU_ITEMS.map((item) => (
+              {MENU_ITEMS.filter((item) => !item.adminOnly || isAdmin).map((item) => (
                 <TouchableOpacity
                   key={item.label}
-                  style={styles.menuItem}
+                  style={[
+                    styles.menuItem,
+                    item.adminOnly && styles.adminItem,
+                    item.adminOnly && { backgroundColor: theme.accentSoft, borderColor: theme.accent },
+                  ]}
                   onPress={() => {
                     onClose();
                     router.push(item.href as any);
                   }}
                 >
-                  <Ionicons name={item.icon} size={22} color={theme.textSecondary} />
-                  <Text style={[styles.menuLabel, { color: theme.textPrimary }]}>{item.label}</Text>
+                  <Ionicons
+                    name={item.icon}
+                    size={22}
+                    color={item.adminOnly ? theme.accent : theme.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.menuLabel,
+                      { color: item.adminOnly ? theme.accent : theme.textPrimary },
+                      item.adminOnly && { fontWeight: "700" },
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -199,6 +227,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 12,
     borderRadius: 10,
+  },
+  adminItem: {
+    borderWidth: 1,
+    marginBottom: 4,
   },
   menuLabel: {
     fontSize: 15,
