@@ -9,6 +9,14 @@ import hashlib
 import secrets
 
 
+def _utc_now() -> datetime:
+    """Default tz-aware UTC. Lo usa AccessRequest cuyas columnas SÍ son
+    DateTime(timezone=True) en BD. El resto de tablas (usuarios, busquedas,
+    detecciones, resultados, favoritos) usan datetime.utcnow porque sus
+    columnas son TIMESTAMP WITHOUT TIME ZONE en BD."""
+    return datetime.now(timezone.utc)
+
+
 class Prenda(Base):
     """
     Tabla base con los campos comunes a toda prenda.
@@ -153,7 +161,7 @@ class AccessRequest(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String, nullable=False, index=True)
     message = Column(String, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=_utc_now)
     otp_hash = Column(String, nullable=True)
     otp_expiration = Column(DateTime(timezone=True), nullable=True)
     status = Column(String, default="pending")  # pending | approved | rejected

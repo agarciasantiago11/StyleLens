@@ -1,12 +1,29 @@
 import bcrypt
+import hashlib
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
-from jose import jwt, JWTError
+from dotenv import load_dotenv
 
-SECRET_KEY = os.getenv("SECRET_KEY", "styleLens-secret-key-change-in-prod")
-ALGORITHM = "HS256"
+# Carga .env defensivamente: este módulo se importa desde múltiples puntos
+# (auth_deps, auth route, scripts) y no podemos asumir que database.py ya corrió.
+load_dotenv()
+
+# SECRET_KEY ya no firma tokens (los tokens son opacos), pero la mantenemos
+# obligatoria por si en el futuro se firma cualquier otro payload sensible.
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "SECRET_KEY no está configurada. Define la variable de entorno SECRET_KEY "
+        "en backend/.env (mínimo 32 caracteres aleatorios)."
+    )
+
 ACCESS_TOKEN_EXPIRE_HOURS = 1
+
+
+def hash_token(token: str) -> str:
+    """SHA256 del bearer token. Lo guardamos hasheado en BD para que un dump
+    de la tabla `usuarios` no filtre sesiones activas."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -18,18 +35,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(user_id: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
-    payload = {"sub": user_id, "exp": expire}
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def decode_token(token: str) -> str:
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    user_id: str | None = payload.get("sub")
-    if not user_id:
-        raise JWTError("Token inválido")
-    return user_id
-
-
-def generate_token() -> str:
-    return secrets.token_hex(32)
+    """Genera un token bearer opaco de 256 bits, criptográficamente aleatorio.
+    El user_id se ignora a propósito: el token no se autodescribe — la
+    asociación token→usuario vive solo en BD (Usuario.token = hash_token(t))."""
+    return secrets.token_urlsafe(32)

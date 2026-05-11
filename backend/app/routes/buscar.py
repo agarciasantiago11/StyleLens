@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import Prenda
 from app.schemas import BuscarResponse, PrendaResponse
 from app.services import cloudinary_service, serpapi_service
+from app.upload_utils import read_imagen_subida
 
 router = APIRouter()
 
@@ -19,7 +20,7 @@ async def buscar_prenda(
     imagen: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    imagen_bytes = await imagen.read()
+    imagen_bytes = await read_imagen_subida(imagen)
     imagen_hash = hashlib.sha256(imagen_bytes).hexdigest()
 
     # 1. Buscar en caché

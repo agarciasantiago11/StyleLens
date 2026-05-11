@@ -1,3 +1,5 @@
+import logging
+import os
 import time
 from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
@@ -5,18 +7,38 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
 from app.models import Usuario, Role
-from app.schemas import UserMeResponse, OTPRequestBody, AccessRequestBody, ChangePasswordBody, VerifyOTPBody
-from app.auth_utils import verify_password, create_access_token
+from app.schemas import UserMeResponse, OTPRequestBody, AccessRequestBody, VerifyOTPBody
+from app.auth_utils import verify_password, create_access_token, hash_token
 from app.services.email_service import send_otp_email, send_access_request_email
 from app.models import AccessRequest
 from datetime import datetime, timedelta, timezone
-import bcrypt
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+# Cuando la API está detrás de proxy/CDN/Nginx, request.client.host es la IP del
+# proxy y todos los usuarios comparten la misma cubeta de rate limit. Si confías
+# en X-Forwarded-For (porque tu proxy lo setea correctamente), activa esta env var.
+_TRUST_FORWARDED_FOR = os.getenv("TRUST_FORWARDED_FOR", "false").lower() in {"1", "true", "yes"}
+
+
+def _client_ip(request: Request) -> str:
+    if _TRUST_FORWARDED_FOR:
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            # Primer IP del header es el cliente original; el resto son proxies intermedios.
+            return xff.split(",")[0].strip()
+        real_ip = request.headers.get("x-real-ip")
+        if real_ip:
+            return real_ip.strip()
+    return request.client.host if request.client else "unknown"
 
 
 class _RateLimiter:
-    """Rate limiter en memoria por IP. No persistente entre reinicios."""
+    """Rate limiter en memoria por IP. No persistente entre reinicios y no apto
+    para multi-worker (cada worker tiene su propio dict). Para producción real,
+    sustituir por Redis."""
 
     def __init__(self, max_calls: int, period_seconds: int):
         self.max_calls = max_calls
@@ -24,7 +46,7 @@ class _RateLimiter:
         self._log: dict[str, list[float]] = defaultdict(list)
 
     def check(self, request: Request) -> None:
-        ip = request.client.host if request.client else "unknown"
+        ip = _client_ip(request)
         now = time.time()
         window_start = now - self.period
 
@@ -66,7 +88,8 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
     token = create_access_token(str(usuario.id))
-    usuario.token = token
+    # Guardamos el hash, no el token en claro: si la BD se compromete no se filtran sesiones activas.
+    usuario.token = hash_token(token)
     usuario.token_expiration = datetime.now(timezone.utc) + timedelta(hours=1)
     db.commit()
 
@@ -82,7 +105,7 @@ def me(
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
 
     token = authorization.split(" ", 1)[1].strip()
-    usuario = db.query(Usuario).filter(Usuario.token == token).first()
+    usuario = db.query(Usuario).filter(Usuario.token == hash_token(token)).first()
 
     if not usuario or _is_token_expired(usuario.token_expiration):
         if usuario:
@@ -111,7 +134,7 @@ def logout(
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
 
     token = authorization.split(" ", 1)[1].strip()
-    usuario = db.query(Usuario).filter(Usuario.token == token).first()
+    usuario = db.query(Usuario).filter(Usuario.token == hash_token(token)).first()
 
     if usuario:
         usuario.token = None
@@ -121,55 +144,96 @@ def logout(
     return {"message": "Sesión cerrada correctamente"}
 
 
-@router.post("/request-register-otp")
-def request_register_otp(body: OTPRequestBody, request: Request, db: Session = Depends(get_db)):
-    _otp_request_limiter.check(request)
+def _purge_pending_access_requests(db: Session, email: str, message: str) -> None:
+    """Elimina solicitudes 'pending' anteriores del mismo email/message para evitar
+    acumulación. Conserva las verified/accepted/rejected como histórico."""
+    db.query(AccessRequest).filter(
+        AccessRequest.email == email,
+        AccessRequest.message == message,
+        AccessRequest.status == "pending",
+    ).delete(synchronize_session=False)
 
-    access_request = AccessRequest(
-        email=body.email,
-        message="register request",
-        status="pending",
+
+# Tope de solicitudes por email+message en la última hora. Evita que un atacante
+# use un email ajeno como destinatario de spam aunque rote IPs.
+_MAX_OTP_REQUESTS_PER_EMAIL_PER_HOUR = 3
+
+
+def _email_request_limit_exceeded(db: Session, email: str, message: str) -> bool:
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+    count = (
+        db.query(AccessRequest)
+        .filter(
+            AccessRequest.email == email,
+            AccessRequest.message == message,
+            AccessRequest.created_at >= cutoff,
+        )
+        .count()
     )
-    db.add(access_request)
+    return count >= _MAX_OTP_REQUESTS_PER_EMAIL_PER_HOUR
 
+
+def _emit_otp_for_email(
+    db: Session,
+    email: str,
+    message: str,
+    response_message: str,
+) -> dict:
+    """Crea AccessRequest + OTP + envía email. Si el envío falla, revierte
+    el OTP y devuelve 500 (estado consistente)."""
+    _purge_pending_access_requests(db, email, message)
+
+    access_request = AccessRequest(email=email, message=message, status="pending")
+    db.add(access_request)
     otp = access_request.generate_otp()
     db.commit()
 
     try:
-        send_otp_email(body.email, otp)
+        send_otp_email(email, otp)
     except Exception as e:
-        # Revertir campos OTP si el envío falla para no dejar estado inconsistente
         access_request.otp_hash = None
         access_request.otp_expiration = None
         db.commit()
         raise HTTPException(status_code=500, detail=f"Error al enviar el email: {e}")
 
-    return {"message": "Si el email es válido, recibirás un código OTP de registro"}
+    return {"message": response_message}
+
+
+@router.post("/request-register-otp")
+def request_register_otp(body: OTPRequestBody, request: Request, db: Session = Depends(get_db)):
+    _otp_request_limiter.check(request)
+
+    # Mensaje genérico siempre: no leak de si el email existe o no.
+    generic_response = {"message": "Si el email es válido, recibirás un código OTP de registro"}
+
+    # 1. Si el email ya está registrado, NO emitimos OTP (evita usar nuestro SMTP
+    #    para spamear emails ajenos). El mensaje al cliente sigue siendo genérico.
+    if db.query(Usuario).filter(Usuario.email == body.email).first():
+        return generic_response
+
+    # 2. Rate-limit por email: aunque rote IPs, no más de N OTPs/hora al mismo destino.
+    if _email_request_limit_exceeded(db, body.email, "register request"):
+        return generic_response
+
+    return _emit_otp_for_email(db, body.email, "register request", generic_response["message"])
 
 
 @router.post("/request-passwordset-otp")
 def request_passwordset_otp(body: OTPRequestBody, request: Request, db: Session = Depends(get_db)):
     _otp_request_limiter.check(request)
 
-    access_request = AccessRequest(
-        email=body.email,
-        message="change password",
-        status="pending",
-    )
-    db.add(access_request)
+    generic_response = {"message": "Si el email es válido, recibirás un código OTP para reestablecer contraseña"}
 
-    otp = access_request.generate_otp()
-    db.commit()
+    # 1. Sólo emitimos OTP si el email existe en usuarios. Para emails que no
+    #    están registrados respondemos lo mismo (no enumeración) pero sin enviar nada.
+    if not db.query(Usuario).filter(Usuario.email == body.email).first():
+        return generic_response
 
-    try:
-        send_otp_email(body.email, otp)
-    except Exception as e:
-        access_request.otp_hash = None
-        access_request.otp_expiration = None
-        db.commit()
-        raise HTTPException(status_code=500, detail=f"Error al enviar el email: {e}")
+    # 2. Rate-limit por email.
+    if _email_request_limit_exceeded(db, body.email, "change password"):
+        return generic_response
 
-    return {"message": "Si el email es válido, recibirás un código OTP para reestablecer contraseña"}
+    return _emit_otp_for_email(db, body.email, "change password", generic_response["message"])
 
 
 @router.post("/verify-otp")
@@ -211,35 +275,6 @@ def verify_otp(
     }
 
 
-@router.put("/cambio-contrasena")
-def cambio_contrasena(body: ChangePasswordBody, db: Session = Depends(get_db)):
-    usuario = db.query(Usuario).filter(Usuario.email == body.email).first()
-    if not usuario:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
-    access_request = (
-        db.query(AccessRequest)
-        .filter(
-            AccessRequest.email == body.email,
-            AccessRequest.message == "change password",
-            AccessRequest.status == "pending",
-        )
-        .order_by(AccessRequest.created_at.desc())
-        .first()
-    )
-    if not access_request:
-        raise HTTPException(status_code=400, detail="No hay solicitud de cambio de contraseña pendiente")
-
-    hashed_pw = bcrypt.hashpw(body.new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    usuario.password_hash = hashed_pw
-    access_request.status = "accepted"
-    access_request.otp_hash = None
-    access_request.otp_expiration = None
-    db.commit()
-
-    return {"message": "Contraseña actualizada correctamente"}
-
-
 @router.post("/request-access")
 def request_access(body: AccessRequestBody, request: Request, db: Session = Depends(get_db)):
     _access_request_limiter.check(request)
@@ -255,6 +290,6 @@ def request_access(body: AccessRequestBody, request: Request, db: Session = Depe
         send_access_request_email(body.email, body.message)
     except Exception as e:
         # La solicitud queda guardada en BD aunque falle el email al admin
-        print(f"[WARN] No se pudo notificar al admin: {e}")
+        logger.warning("No se pudo notificar al admin: %s", e)
 
     return {"message": "Solicitud enviada correctamente. El administrador se pondrá en contacto contigo."}

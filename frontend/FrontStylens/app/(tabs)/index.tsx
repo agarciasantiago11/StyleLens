@@ -16,16 +16,20 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import Constants from "expo-constants";
 import Sidebar from "./Sidebar";
 import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
-import * as ExpoLinking from "expo-linking";
 import { useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import TipsBottomSheet, { TipsBottomSheetRef } from "./TipsBottomSheet";
 import { useAppTheme } from "@/contexts/app-theme";
 import apiClient from "@/api/client";
+import {
+  detectarCajas,
+  detectarPrenda,
+  type BackendBBox,
+  type BackendPrenda,
+} from "@/api/detection";
 import { useAuthStore } from "@/store/authStore";
 
 const FORMATS = ["JPG", "PNG", "GIF", "WEBP", "HEIC"];
@@ -35,43 +39,6 @@ const DEFAULT_TIMEOUT_MESSAGE =
   "Ups... algo salio mal, pruebe de nuevo en unos minutos.";
 
 type ScreenState = "home" | "preview" | "select" | "loading" | "results" | "error";
-
-type BackendPrenda = {
-  id?: string | number;
-  nombre?: string | null;
-  categoria?: string | null;
-  precio?: number | string | null;
-  imagen_url?: string | null;
-  imagen?: string | null;
-  link?: string | null;
-  url?: string | null;
-};
-
-type DetectarApiResponse = {
-  prendas_detectadas?: BackendPrenda[];
-  total?: number;
-  desde_cache?: boolean;
-};
-
-type BackendBBox = {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-};
-
-type BackendDetectedBox = {
-  id: string;
-  clase: string;
-  confianza: number;
-  bbox: BackendBBox;
-};
-
-type DetectarCajasApiResponse = {
-  prendas_detectadas?: BackendDetectedBox[];
-  total?: number;
-  captura_id?: string;
-};
 
 type Product = {
   id: string | number;
@@ -86,62 +53,11 @@ type BackendErrorPayload = {
   detail?: unknown;
 };
 
-type FavoritoApi = {
-  prenda_id?: string | number | null;
-};
-
 type SelectableBox = {
   id: string;
   clase: string;
   confianza: number;
   bbox: BackendBBox;
-};
-
-const getConfiguredApiBaseUrl = () => {
-  const configured = process.env.EXPO_PUBLIC_API_BASE_URL;
-  if (configured && configured.trim().length > 0) {
-    return configured.trim().replace(/\/$/, "");
-  }
-
-  return null;
-};
-
-const extractHost = (value: string | null | undefined) => {
-  if (!value) return null;
-
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const withoutProtocol = trimmed.replace(/^https?:\/\//, "");
-  const hostPort = withoutProtocol.split("/")[0];
-  const host = hostPort.split(":")[0];
-  return host || null;
-};
-
-const getExpoHostApiBaseUrl = () => {
-  const hostCandidates = [
-    Constants.expoConfig?.hostUri,
-    (Constants as any).expoGoConfig?.debuggerHost,
-    (Constants as any).manifest?.debuggerHost,
-    ExpoLinking.createURL("/"),
-  ];
-
-  const host = hostCandidates.map(extractHost).find((item) => Boolean(item));
-  if (!host) return null;
-  return `http://${host}:8000`;
-};
-
-const getApiBaseCandidates = () => {
-  const candidates = [
-    getConfiguredApiBaseUrl(),
-    getExpoHostApiBaseUrl(),
-    Platform.select({
-      android: "http://10.0.2.2:8000",
-      default: "http://localhost:8000",
-    }) as string,
-  ].filter((item): item is string => Boolean(item));
-
-  return [...new Set(candidates)];
 };
 
 const toErrorMessage = (error: unknown) => {
@@ -156,130 +72,6 @@ const getApiErrorDetail = (payload: unknown) => {
   const detail = (payload as { detail?: unknown }).detail;
   if (typeof detail === "string") return detail;
   return null;
-};
-
-const buildImageFormData = async (selectedImageUri: string) => {
-  const formData = new FormData();
-
-  if (Platform.OS === "web") {
-    const response = await fetch(selectedImageUri);
-    const blob = await response.blob();
-    formData.append("imagen", blob, inferFileName(selectedImageUri));
-  } else {
-    formData.append("imagen", {
-      uri: selectedImageUri,
-      name: inferFileName(selectedImageUri),
-      type: inferMimeType(selectedImageUri),
-    } as any);
-  }
-
-  return formData;
-};
-
-const detectarCajasConBackend = async (selectedImageUri: string, token?: string | null) => {
-  const apiBaseCandidates = getApiBaseCandidates();
-  const errors: string[] = [];
-
-  for (const apiBase of apiBaseCandidates) {
-    try {
-      const formData = await buildImageFormData(selectedImageUri);
-      const response = await fetch(`${apiBase}/api/v1/detectar-cajas`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: formData,
-      });
-
-      if (!response.ok) {
-        let detail = `HTTP ${response.status}`;
-        try {
-          const body = await response.json();
-          detail = getApiErrorDetail(body) ?? detail;
-        } catch {
-          const textBody = await response.text();
-          if (textBody) detail = textBody;
-        }
-
-        errors.push(`[${apiBase}] ${detail}`);
-        continue;
-      }
-
-      const data: DetectarCajasApiResponse = await response.json();
-      return data;
-    } catch (error) {
-      errors.push(`[${apiBase}] ${toErrorMessage(error)}`);
-    }
-  }
-
-  throw new Error(errors.join(" | "));
-};
-
-const detectarPrendaSeleccionadaConBackend = async (
-  selectedImageUri: string,
-  box: SelectableBox,
-  capturaId?: string | null,
-  token?: string | null
-) => {
-  const apiBaseCandidates = getApiBaseCandidates();
-  const errors: string[] = [];
-
-  for (const apiBase of apiBaseCandidates) {
-    try {
-      const formData = await buildImageFormData(selectedImageUri);
-      formData.append("clase", box.clase);
-      formData.append("x", String(box.bbox.x));
-      formData.append("y", String(box.bbox.y));
-      formData.append("w", String(box.bbox.w));
-      formData.append("h", String(box.bbox.h));
-      formData.append("deteccion_id", box.id);
-      if (capturaId) {
-        formData.append("captura_id", capturaId);
-      }
-
-      const response = await fetch(`${apiBase}/api/v1/detectar-prenda`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: formData,
-      });
-
-      if (!response.ok) {
-        let detail = `HTTP ${response.status}`;
-        try {
-          const body = await response.json();
-          detail = getApiErrorDetail(body) ?? detail;
-        } catch {
-          const textBody = await response.text();
-          if (textBody) detail = textBody;
-        }
-
-        errors.push(`[${apiBase}] ${detail}`);
-        continue;
-      }
-
-      const data: DetectarApiResponse = await response.json();
-      return data;
-    } catch (error) {
-      errors.push(`[${apiBase}] ${toErrorMessage(error)}`);
-    }
-  }
-
-  throw new Error(errors.join(" | "));
-};
-
-const inferMimeType = (uri: string) => {
-  const normalized = uri.toLowerCase();
-  if (normalized.endsWith(".png")) return "image/png";
-  if (normalized.endsWith(".gif")) return "image/gif";
-  if (normalized.endsWith(".webp")) return "image/webp";
-  if (normalized.endsWith(".heic")) return "image/heic";
-  return "image/jpeg";
-};
-
-const inferFileName = (uri: string) => {
-  const cleanedUri = uri.split("?")[0];
-  const parts = cleanedUri.split("/");
-  const lastPart = parts[parts.length - 1];
-  if (lastPart && lastPart.includes(".")) return lastPart;
-  return "photo.jpg";
 };
 
 const formatPrice = (value: number | string | null | undefined) => {
@@ -343,7 +135,6 @@ export default function StylensScreen() {
   const scaleGallery = useRef(new Animated.Value(1)).current;
   const tipsSheetRef = useRef<TipsBottomSheetRef>(null);
   const pendingAction = useRef<"camera" | "gallery" | null>(null);
-  const requestTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(HIDE_TIPS_KEY)
@@ -358,14 +149,6 @@ export default function StylensScreen() {
         .catch(() => setHideTips(false));
     }, [])
   );
-
-  useEffect(() => {
-    return () => {
-      if (requestTimeout.current) {
-        clearTimeout(requestTimeout.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!selectedImage) {
@@ -451,10 +234,6 @@ export default function StylensScreen() {
     setPreviewLayout({ width: 0, height: 0 });
     setErrorMessage(null);
     setScreenState("home");
-    if (requestTimeout.current) {
-      clearTimeout(requestTimeout.current);
-      requestTimeout.current = null;
-    }
   };
 
   const handleContinue = async () => {
@@ -464,24 +243,17 @@ export default function StylensScreen() {
       return;
     }
 
+    if (!token) {
+      setErrorMessage("Tu sesión ha caducado. Vuelve a iniciar sesión.");
+      setScreenState("error");
+      return;
+    }
+
     setErrorMessage(null);
     setScreenState("loading");
 
     try {
-      let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(new Error("REQUEST_TIMEOUT"));
-        }, REQUEST_TIMEOUT_MS);
-      });
-
-      requestTimeout.current = timeoutId;
-
-      const data = await Promise.race([
-        detectarCajasConBackend(selectedImage, token),
-        timeoutPromise,
-      ]);
+      const data = await detectarCajas(selectedImage, REQUEST_TIMEOUT_MS);
 
       const boxes = data.prendas_detectadas ?? [];
       setCurrentCapturaId(data.captura_id ?? null);
@@ -496,7 +268,7 @@ export default function StylensScreen() {
       setScreenState("select");
     } catch (error) {
       const reason = toErrorMessage(error);
-      const timeoutTriggered = reason.includes("REQUEST_TIMEOUT");
+      const timeoutTriggered = reason === "REQUEST_TIMEOUT";
 
       setScreenState("error");
       setErrorMessage(
@@ -504,11 +276,6 @@ export default function StylensScreen() {
           ? DEFAULT_TIMEOUT_MESSAGE
           : `No se pudo completar la deteccion. ${reason}`
       );
-    } finally {
-      if (requestTimeout.current) {
-        clearTimeout(requestTimeout.current);
-        requestTimeout.current = null;
-      }
     }
   };
 
@@ -519,32 +286,24 @@ export default function StylensScreen() {
       return;
     }
 
+    if (!token) {
+      setErrorMessage("Tu sesión ha caducado. Vuelve a iniciar sesión.");
+      setScreenState("error");
+      return;
+    }
+
     setSelectedBoxId(box.id);
     setErrorMessage(null);
     setScreenState("loading");
 
     try {
-      let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(new Error("REQUEST_TIMEOUT"));
-        }, REQUEST_TIMEOUT_MS);
-      });
-
-      requestTimeout.current = timeoutId;
-
-      const data = await Promise.race([
-        detectarPrendaSeleccionadaConBackend(selectedImage, box, currentCapturaId, token),
-        timeoutPromise,
-      ]);
-
+      const data = await detectarPrenda(selectedImage, box, currentCapturaId, REQUEST_TIMEOUT_MS);
       const mappedProducts = mapBackendProducts(data.prendas_detectadas ?? []);
       setProducts(mappedProducts);
       setScreenState("results");
     } catch (error) {
       const reason = toErrorMessage(error);
-      const timeoutTriggered = reason.includes("REQUEST_TIMEOUT");
+      const timeoutTriggered = reason === "REQUEST_TIMEOUT";
 
       setScreenState("error");
       setErrorMessage(
@@ -552,11 +311,6 @@ export default function StylensScreen() {
           ? DEFAULT_TIMEOUT_MESSAGE
           : `No se pudo completar la deteccion. ${reason}`
       );
-    } finally {
-      if (requestTimeout.current) {
-        clearTimeout(requestTimeout.current);
-        requestTimeout.current = null;
-      }
     }
   };
 

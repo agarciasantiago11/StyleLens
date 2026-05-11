@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.auth_deps import get_current_user
 from app.database import get_db
+from app.upload_utils import read_imagen_subida
 from app.models import (
     Busqueda,
     Deteccion,
@@ -154,15 +155,70 @@ def _procesar_recorte(
     return deteccion, prendas, desde_cache
 
 
+def _serializar_caja_detectada(det: Deteccion) -> dict:
+    return {
+        "id": str(det.id),
+        "clase": det.clase or "unknown",
+        "confianza": float(det.confianza or 1.0),
+        "bbox": {
+            "x": float(det.bbox_x or 0.0),
+            "y": float(det.bbox_y or 0.0),
+            "w": float(det.bbox_w or 1.0),
+            "h": float(det.bbox_h or 1.0),
+        },
+    }
+
+
 @router.post("/detectar-cajas", response_model=DetectarCajasResponse)
 async def detectar_cajas(
     imagen: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    imagen_bytes = await imagen.read()
+    imagen_bytes = await read_imagen_subida(imagen)
     imagen_hash = hashlib.sha256(imagen_bytes).hexdigest()
 
+    # Caché: si la misma imagen ya se procesó (cualquier usuario), reutilizamos
+    # las URLs de Cloudinary y clonamos las Detecciones para esta nueva Búsqueda.
+    busqueda_anterior = (
+        db.query(Busqueda)
+        .filter(Busqueda.imagen_hash_original == imagen_hash)
+        .first()
+    )
+
+    if busqueda_anterior and busqueda_anterior.detecciones:
+        busqueda = Busqueda(
+            usuario_id=current_user.id,
+            imagen_original_url=busqueda_anterior.imagen_original_url,
+            imagen_hash_original=imagen_hash,
+        )
+        db.add(busqueda)
+        # Flush para que busqueda.id quede poblado antes de usarlo como FK.
+        db.flush()
+
+        cajas = []
+        for det_ant in busqueda_anterior.detecciones:
+            nueva_det = Deteccion(
+                busqueda_id=busqueda.id,
+                clase=det_ant.clase,
+                confianza=det_ant.confianza,
+                bbox_x=det_ant.bbox_x,
+                bbox_y=det_ant.bbox_y,
+                bbox_w=det_ant.bbox_w,
+                bbox_h=det_ant.bbox_h,
+                recorte_url=det_ant.recorte_url,
+            )
+            db.add(nueva_det)
+            cajas.append(_serializar_caja_detectada(nueva_det))
+
+        db.commit()
+        return DetectarCajasResponse(
+            prendas_detectadas=cajas,
+            total=len(cajas),
+            captura_id=busqueda.id,
+        )
+
+    # Sin caché: subir original, correr YOLO, persistir detecciones nuevas.
     try:
         original_url = cloudinary_service.subir_imagen(
             imagen_bytes, nombre=f"original_{imagen_hash[:16]}"
@@ -176,8 +232,7 @@ async def detectar_cajas(
         imagen_hash_original=imagen_hash,
     )
     db.add(busqueda)
-    db.commit()
-    db.refresh(busqueda)
+    db.flush()
 
     try:
         cajas_detectadas = yolo_service.detectar_cajas(imagen_bytes)
@@ -232,24 +287,9 @@ async def detectar_cajas(
             recorte_url=recorte_url,
         )
         db.add(det)
-        db.flush()
-
-        cajas.append(
-            {
-                "id": str(det.id),
-                "clase": det.clase or "unknown",
-                "confianza": float(det.confianza or 1.0),
-                "bbox": {
-                    "x": float(det.bbox_x or 0.0),
-                    "y": float(det.bbox_y or 0.0),
-                    "w": float(det.bbox_w or 1.0),
-                    "h": float(det.bbox_h or 1.0),
-                },
-            }
-        )
+        cajas.append(_serializar_caja_detectada(det))
 
     db.commit()
-    db.refresh(busqueda)
 
     return DetectarCajasResponse(
         prendas_detectadas=cajas,
@@ -264,15 +304,26 @@ async def detectar_prendas(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    imagen_bytes = await imagen.read()
+    imagen_bytes = await read_imagen_subida(imagen)
     imagen_hash = hashlib.sha256(imagen_bytes).hexdigest()
 
-    try:
-        original_url = cloudinary_service.subir_imagen(
-            imagen_bytes, nombre=f"original_{imagen_hash[:16]}"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al subir imagen original: {str(e)}")
+    # Cache check ANTES del upload: si la imagen ya se procesó, reusamos su URL
+    # de Cloudinary y nos ahorramos una subida al CDN.
+    busqueda_anterior = (
+        db.query(Busqueda)
+        .filter(Busqueda.imagen_hash_original == imagen_hash)
+        .first()
+    )
+
+    if busqueda_anterior and busqueda_anterior.detecciones:
+        original_url = busqueda_anterior.imagen_original_url
+    else:
+        try:
+            original_url = cloudinary_service.subir_imagen(
+                imagen_bytes, nombre=f"original_{imagen_hash[:16]}"
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error al subir imagen original: {str(e)}")
 
     busqueda = Busqueda(
         usuario_id=current_user.id,
@@ -280,16 +331,7 @@ async def detectar_prendas(
         imagen_hash_original=imagen_hash,
     )
     db.add(busqueda)
-
-    # Caché nivel 1: misma imagen ya procesada → clonar estructura de detecciones/resultados
-    busqueda_anterior = (
-        db.query(Busqueda)
-        .filter(
-            Busqueda.imagen_hash_original == imagen_hash,
-            Busqueda.id != busqueda.id,
-        )
-        .first()
-    )
+    db.flush()
 
     if busqueda_anterior and busqueda_anterior.detecciones:
         detecciones_creadas = []
@@ -410,14 +452,67 @@ async def detectar_prenda_individual(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    imagen_bytes = await imagen.read()
+    imagen_bytes = await read_imagen_subida(imagen)
 
     if w <= 0 or h <= 0:
         raise HTTPException(status_code=422, detail="Las dimensiones de la bbox deben ser mayores a 0")
 
-    # Obtener o crear Busqueda
-    busqueda = None
-    if captura_id:
+    busqueda: Optional[Busqueda] = None
+    deteccion_existente: Optional[Deteccion] = None
+
+    # Orden importante: deteccion_id → captura_id → crear nueva.
+    # Resolver primero las refs que ya implican una Busqueda para no subir
+    # la imagen original a Cloudinary y dejarla huérfana sin commit.
+    if deteccion_id:
+        try:
+            deteccion_uuid = UUID(deteccion_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="deteccion_id no es un UUID válido")
+
+        deteccion_existente = (
+            db.query(Deteccion)
+            .join(Busqueda, Busqueda.id == Deteccion.busqueda_id)
+            .filter(
+                Deteccion.id == deteccion_uuid,
+                Busqueda.usuario_id == current_user.id,
+            )
+            .first()
+        )
+        if not deteccion_existente:
+            raise HTTPException(status_code=404, detail="Detección no encontrada")
+
+        busqueda = deteccion_existente.busqueda
+        clase = deteccion_existente.clase or clase
+        x = float(deteccion_existente.bbox_x or x)
+        y = float(deteccion_existente.bbox_y or y)
+        w = float(deteccion_existente.bbox_w or w)
+        h = float(deteccion_existente.bbox_h or h)
+
+        # Si la detección ya tiene resultados, devolverlos sin reprocesar.
+        if deteccion_existente.resultados:
+            prendas_existentes = [
+                r.prenda
+                for r in sorted(
+                    deteccion_existente.resultados,
+                    key=lambda r: r.rank if r.rank is not None else 9999,
+                )
+                if r.prenda
+            ]
+            return DetectarResponse(
+                captura_id=busqueda.id,
+                prendas_detectadas=[PrendaResponse.model_validate(p) for p in prendas_existentes],
+                total=len(prendas_existentes),
+                desde_cache=True,
+                detecciones_creadas=[
+                    DeteccionCreadaInfo(
+                        id=deteccion_existente.id,
+                        clase=deteccion_existente.clase,
+                        confianza=deteccion_existente.confianza,
+                    )
+                ],
+            )
+
+    elif captura_id:
         try:
             captura_uuid = UUID(captura_id)
         except ValueError:
@@ -445,44 +540,7 @@ async def detectar_prenda_individual(
             imagen_hash_original=imagen_hash_orig,
         )
         db.add(busqueda)
-
-    deteccion_existente: Optional[Deteccion] = None
-    if deteccion_id:
-        try:
-            deteccion_uuid = UUID(deteccion_id)
-        except ValueError:
-            raise HTTPException(status_code=422, detail="deteccion_id no es un UUID válido")
-
-        deteccion_existente = (
-            db.query(Deteccion)
-            .join(Busqueda, Busqueda.id == Deteccion.busqueda_id)
-            .filter(
-                Deteccion.id == deteccion_uuid,
-                Busqueda.usuario_id == current_user.id,
-            )
-            .first()
-        )
-        if not deteccion_existente:
-            raise HTTPException(status_code=404, detail="Detección no encontrada")
-
-        busqueda = deteccion_existente.busqueda
-        clase = deteccion_existente.clase or clase
-        x = float(deteccion_existente.bbox_x or x)
-        y = float(deteccion_existente.bbox_y or y)
-        w = float(deteccion_existente.bbox_w or w)
-        h = float(deteccion_existente.bbox_h or h)
-
-        if deteccion_existente.resultados:
-            prendas_existentes = [r.prenda for r in sorted(deteccion_existente.resultados, key=lambda r: r.rank or 0) if r.prenda]
-            return DetectarResponse(
-                captura_id=busqueda.id,
-                prendas_detectadas=[PrendaResponse.model_validate(p) for p in prendas_existentes],
-                total=len(prendas_existentes),
-                desde_cache=True,
-                detecciones_creadas=[
-                    DeteccionCreadaInfo(id=deteccion_existente.id, clase=deteccion_existente.clase, confianza=deteccion_existente.confianza)
-                ],
-            )
+        db.flush()
 
     selector = f"{clase}|{x:.6f}|{y:.6f}|{w:.6f}|{h:.6f}".encode("utf-8")
     imagen_hash = hashlib.sha256(imagen_bytes + selector).hexdigest()

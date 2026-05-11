@@ -16,24 +16,28 @@ class RegisterUserBody(BaseModel):
     password: str
 
 
+class CreateUserBody(BaseModel):
+    nombre_completo: str
+    email: str
+    password_inicial: str
+    role_id: int
+
+
 @router.post("/")
 def create_user(
-    nombre_completo: str,
-    email: str,
-    password_inicial: str,
-    role_id: int,
+    body: CreateUserBody,
     db: Session = Depends(get_db),
     _: Usuario = Depends(get_admin_user),
 ):
-    if db.query(Usuario).filter(Usuario.email == email).first():
+    if db.query(Usuario).filter(Usuario.email == body.email).first():
         raise HTTPException(status_code=400, detail="El email ya está registrado")
 
-    hashed_pw = bcrypt.hashpw(password_inicial.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    hashed_pw = bcrypt.hashpw(body.password_inicial.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     db.add(Usuario(
-        nombre_completo=nombre_completo,
-        email=email,
+        nombre_completo=body.nombre_completo,
+        email=body.email,
         password_hash=hashed_pw,
-        role_id=role_id,
+        role_id=body.role_id,
         is_active=True,
     ))
     db.commit()
@@ -61,9 +65,9 @@ def register_user(
     if not access_request:
         raise HTTPException(status_code=400, detail="OTP no verificado o solicitud expirada")
 
-    user_role = db.query(Role).filter(Role.id == 3).first()
+    user_role = db.query(Role).filter(Role.nombre == "user").first()
     if not user_role:
-        raise HTTPException(status_code=500, detail="No existe el rol user (id=3)")
+        raise HTTPException(status_code=500, detail="No existe el rol 'user' en la tabla roles")
 
     hashed_pw = bcrypt.hashpw(body.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -71,7 +75,7 @@ def register_user(
         nombre_completo=body.nombre_usuario,
         email=body.email,
         password_hash=hashed_pw,
-        role_id=3,
+        role_id=user_role.id,
         is_active=True,
     ))
     access_request.status = "accepted"
@@ -83,7 +87,7 @@ def register_user(
 @router.get("/list")
 def list_active_users(
     db: Session = Depends(get_db),
- #   _: Usuario = Depends(get_admin_user),
+    _: Usuario = Depends(get_admin_user),
 ):
     return db.query(Usuario).filter(Usuario.is_active == True).all()
 
@@ -91,7 +95,7 @@ def list_active_users(
 @router.get("/roles")
 def get_roles(
     db: Session = Depends(get_db),
- #   _: Usuario = Depends(get_admin_user),
+    _: Usuario = Depends(get_admin_user),
 ):
     return db.query(Role).all()
 
@@ -101,7 +105,7 @@ def update_user_role(
     user_id: str,
     nuevo_role_id: int,
     db: Session = Depends(get_db),
- #   _: Usuario = Depends(get_admin_user),
+    _: Usuario = Depends(get_admin_user),
 ):
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not usuario:
@@ -115,7 +119,7 @@ def update_user_role(
 def soft_delete_user(
     user_id: str,
     db: Session = Depends(get_db),
-#    _: Usuario = Depends(get_admin_user),
+    _: Usuario = Depends(get_admin_user),
 ):
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not usuario:
