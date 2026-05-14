@@ -1,17 +1,61 @@
 import React from "react";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { AxiosError } from "axios";
+import { sendSupportReport } from "@/api/support";
 import { ScreenShell } from "@/components/screen-shell";
 import { useAppTheme } from "@/contexts/app-theme";
 
 export default function ContactoScreen() {
   const { theme } = useAppTheme();
-  const [subject, setSubject] = React.useState("Selecciona un asunto");
-  const [name, setName] = React.useState("");
-  const [email, setEmail] = React.useState("");
+  const [contactType, setContactType] = React.useState("Consulta comercial");
+  const [subject, setSubject] = React.useState("");
   const [message, setMessage] = React.useState("");
-  const [newsletter, setNewsletter] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [showSuccessModal, setShowSuccessModal] = React.useState(false);
   const [newsletterEmail, setNewsletterEmail] = React.useState("");
+
+  const handleSendContact = async () => {
+    const trimmedType = contactType.trim();
+    const trimmedSubject = subject.trim();
+    const trimmedMessage = message.trim();
+
+    if (!trimmedType) {
+      Alert.alert("Falta información", "Selecciona un tipo de asunto.");
+      return;
+    }
+    if (!trimmedSubject) {
+      Alert.alert("Falta información", "Escribe un asunto para el mensaje.");
+      return;
+    }
+    if (!trimmedMessage) {
+      Alert.alert("Falta información", "Escribe tu mensaje antes de enviarlo.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await sendSupportReport({
+        issueType: `Contacto - ${trimmedType}`,
+        title: trimmedSubject,
+        description: trimmedMessage,
+        evidences: [],
+      });
+
+      setSubject("");
+      setMessage("");
+      setShowSuccessModal(true);
+    } catch (error) {
+      const fallback = "No se pudo enviar el mensaje. Inténtalo de nuevo.";
+      const detail =
+        error instanceof AxiosError && typeof error.response?.data?.detail === "string"
+          ? error.response.data.detail
+          : fallback;
+      Alert.alert("Error", detail || fallback);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <ScreenShell title="Contacto">
@@ -21,14 +65,14 @@ export default function ContactoScreen() {
           <Ionicons name="mail-outline" size={18} color={theme.accent} />
           <View style={styles.infoTextWrap}>
             <Text style={styles.infoLabel}>Email de soporte</Text>
-            <Text style={styles.infoValue}>support@stylens.com</Text>
+            <Text style={styles.infoValue}>support@stylens.com (ficticio, real: stylensgarcijuanjesus@gmail.com)</Text>
           </View>
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="business-outline" size={18} color={theme.accent} />
           <View style={styles.infoTextWrap}>
             <Text style={styles.infoLabel}>Email comercial</Text>
-            <Text style={styles.infoValue}>business@stylens.com</Text>
+            <Text style={styles.infoValue}>business@stylens.com (ficticio, real: stylensgarcijuanjesus@gmail.com)</Text>
           </View>
         </View>
         <View style={styles.infoRow}>
@@ -45,27 +89,8 @@ export default function ContactoScreen() {
           <Ionicons name="chatbubble-ellipses-outline" size={18} color={theme.textPrimary} />
           <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Formulario de contacto</Text>
         </View>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="Nombre completo"
-          placeholderTextColor={theme.textMuted}
-          style={[styles.input, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.textPrimary }]}
-        />
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email de contacto"
-          placeholderTextColor={theme.textMuted}
-          style={[styles.input, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.textPrimary }]}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-
         <View style={styles.choiceList}>
           {[
-            "Selecciona un asunto",
-            "Soporte técnico",
             "Consulta comercial",
             "Sugerencia",
             "Colaboración",
@@ -76,15 +101,15 @@ export default function ContactoScreen() {
               style={[
                 styles.choiceItem,
                 { borderColor: theme.border, backgroundColor: theme.surface },
-                subject === item && { borderColor: theme.accent, backgroundColor: theme.accentSoft },
+                contactType === item && { borderColor: theme.accent, backgroundColor: theme.accentSoft },
               ]}
-              onPress={() => setSubject(item)}
+              onPress={() => setContactType(item)}
             >
               <Text
                 style={[
                   styles.choiceText,
                   { color: theme.textSecondary },
-                  subject === item && { color: theme.accent, fontWeight: "700" },
+                  contactType === item && { color: theme.accent, fontWeight: "700" },
                 ]}
               >
                 {item}
@@ -92,6 +117,14 @@ export default function ContactoScreen() {
             </Pressable>
           ))}
         </View>
+
+        <TextInput
+          value={subject}
+          onChangeText={setSubject}
+          placeholder="Asunto"
+          placeholderTextColor={theme.textMuted}
+          style={[styles.input, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.textPrimary }]}
+        />
 
         <TextInput
           value={message}
@@ -102,19 +135,13 @@ export default function ContactoScreen() {
           style={[styles.textArea, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.textPrimary }]}
         />
 
-        <Pressable style={styles.checkboxRow} onPress={() => setNewsletter((v) => !v)}>
-          <View style={[styles.checkbox, newsletter && styles.checkboxChecked]}>
-            {newsletter && <Ionicons name="checkmark" size={12} color="#fff" />}
-          </View>
-          <Text style={styles.checkboxLabel}>Deseo recibir actualizaciones y novedades</Text>
-        </Pressable>
-
         <Pressable
           style={[styles.btn, { backgroundColor: theme.accent }]}
-          onPress={() => Alert.alert("Contacto", "Mensaje enviado correctamente")}
+          onPress={handleSendContact}
+          disabled={isSubmitting}
         >
           <Ionicons name="send" size={16} color="#fff" />
-          <Text style={styles.btnText}>Enviar mensaje</Text>
+          <Text style={styles.btnText}>{isSubmitting ? "Enviando..." : "Enviar mensaje"}</Text>
         </Pressable>
       </View>
 
@@ -171,6 +198,26 @@ export default function ContactoScreen() {
           <Text style={styles.secondaryBtnText}>Suscribirse</Text>
         </Pressable>
       </View>
+
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <Pressable style={styles.successOverlay} onPress={() => setShowSuccessModal(false)}>
+          <Pressable style={[styles.successCard, { backgroundColor: theme.surface }]} onPress={() => {}}>
+            <Ionicons name="checkmark-circle" size={72} color="#22c55e" />
+            <Text style={[styles.successText, { color: theme.textPrimary }]}>Se envio correctamente su mensaje.</Text>
+            <Pressable
+              style={[styles.successButton, { backgroundColor: theme.accent }]}
+              onPress={() => setShowSuccessModal(false)}
+            >
+              <Text style={styles.successButtonText}>Aceptar</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScreenShell>
   );
 }
@@ -262,29 +309,6 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
     color: "#111",
   },
-  checkboxRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: "#d1d5db",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  checkboxChecked: {
-    borderColor: "#db2777",
-    backgroundColor: "#db2777",
-  },
-  checkboxLabel: {
-    flex: 1,
-    fontSize: 13,
-    color: "#6b7280",
-  },
   btn: {
     marginTop: 2,
     borderRadius: 14,
@@ -340,6 +364,41 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: {
     color: "#fff",
+    fontWeight: "700",
+  },
+  successOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  successCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 18,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    alignItems: "center",
+    gap: 14,
+  },
+  successText: {
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  successButton: {
+    marginTop: 4,
+    minWidth: 120,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  successButtonText: {
+    color: "#fff",
+    fontSize: 14,
     fontWeight: "700",
   },
 });

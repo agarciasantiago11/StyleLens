@@ -4,7 +4,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
-from app.routes import detectar, auth, buscar, prendas, users, favoritos, capturas
+from app.routes import detectar, auth, buscar, prendas, users, favoritos, capturas, soporte
 from app.database import engine, Base
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,7 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["Autenticación"])
 app.include_router(users.router)
 app.include_router(favoritos.router, prefix="/api/v1", tags=["favoritos"])
 app.include_router(capturas.router, prefix="/api/v1", tags=["capturas"])
+app.include_router(soporte.router)
 
 
 @app.get("/")

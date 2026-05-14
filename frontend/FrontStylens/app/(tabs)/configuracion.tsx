@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { ScreenShell } from "@/components/screen-shell";
 import { useAppTheme } from "@/contexts/app-theme";
+import { useAuthStore } from "@/store/authStore";
 import apiClient from "@/api/client";
 
 const HIDE_TIPS_KEY = "stylelens.hide-recommendations";
@@ -20,6 +21,7 @@ const SEARCH_PRICE_MAX_KEY = "stylelens.search.priceMax";
 
 export default function ConfiguracionScreen() {
   const router = useRouter();
+  const logout = useAuthStore((state) => state.logout);
   const { theme, themes, selectedThemeId, setSelectedThemeId } = useAppTheme();
 
   const [priceMin, setPriceMin] = useState("");
@@ -29,6 +31,8 @@ export default function ConfiguracionScreen() {
   const [savedVisible, setSavedVisible] = useState(false);
   const [deleteConfirmPending, setDeleteConfirmPending] = useState(false);
   const [deletingHistory, setDeletingHistory] = useState(false);
+  const [deleteAccountPending, setDeleteAccountPending] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -86,6 +90,26 @@ export default function ConfiguracionScreen() {
       }, 2000);
     } catch {
       Alert.alert("Error", "No se pudieron guardar los cambios.");
+    }
+  };
+
+  const handleEliminarCuenta = async () => {
+    if (!deleteAccountPending) {
+      setDeleteAccountPending(true);
+      return;
+    }
+
+    setDeletingAccount(true);
+    try {
+      await apiClient.delete("/api/user/me/delete");
+      logout();
+      Alert.alert("Cuenta", "Tu cuenta se ha eliminado correctamente.");
+      router.replace("/sign-in");
+    } catch {
+      Alert.alert("Error", "No se pudo eliminar la cuenta.");
+    } finally {
+      setDeletingAccount(false);
+      setDeleteAccountPending(false);
     }
   };
 
@@ -155,6 +179,37 @@ export default function ConfiguracionScreen() {
                 <Text style={styles.dangerText}>Eliminar todo el historial</Text>
               </Pressable>
             )}
+
+            <View style={styles.accountDeleteSection}>
+              <Text style={[styles.infoText, { color: theme.textSecondary }]}>
+                Si desea cerrar su acceso permanentemente, pulse <Text style={{ fontWeight: "700" }}>Eliminar cuenta.</Text>
+              </Text>
+              {deleteAccountPending ? (
+                <View style={styles.confirmRow}>
+                  <Pressable
+                    style={[styles.dangerButton, styles.confirmButton]}
+                    onPress={handleEliminarCuenta}
+                    disabled={deletingAccount}
+                  >
+                    <Ionicons name="person-remove-outline" size={16} color="#dc2626" />
+                    <Text style={styles.dangerText}>
+                      {deletingAccount ? "Eliminando cuenta..." : "Confirmar eliminación de cuenta"}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.cancelButton}
+                    onPress={() => setDeleteAccountPending(false)}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancelar</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable style={styles.dangerButton} onPress={handleEliminarCuenta}>
+                  <Ionicons name="person-remove-outline" size={16} color="#dc2626" />
+                  <Text style={styles.dangerText}>Eliminar cuenta</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
 
           {/* Apariencia */}
@@ -290,6 +345,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: "#374151",
+  },
+  accountDeleteSection: {
+    gap: 8,
+    marginTop: 6,
   },
   inputRow: {
     flexDirection: "row",
