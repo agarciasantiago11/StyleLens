@@ -180,7 +180,7 @@ def update_user_role(
     user_id: str,
     nuevo_role_id: int,
     db: Session = Depends(get_db),
- #   _: Usuario = Depends(get_admin_user),
+    current_user: Usuario = Depends(get_current_user),
 ):
     current_role = _get_role_or_403(current_user, db, 50)
 
@@ -196,10 +196,10 @@ def update_user_role(
 
     if current_role.prioridad < 100:
         user_current_role = db.query(Role).filter(Role.id == usuario.role_id).first()
-        if user_current_role and user_current_role.prioridad >= current_role.prioridad:
-            raise HTTPException(status_code=403, detail="No puedes modificar usuarios con un rol igual o superior al tuyo")
-        if target_role.prioridad > current_role.prioridad:
-            raise HTTPException(status_code=403, detail="No puedes asignar un rol superior al tuyo")
+        if user_current_role and user_current_role.prioridad >= 100:
+            raise HTTPException(status_code=403, detail="No puedes modificar usuarios con rol de administrador")
+        if target_role.prioridad >= 100:
+            raise HTTPException(status_code=403, detail="No puedes asignar el rol de administrador")
 
     usuario.role_id = nuevo_role_id
     db.commit()
@@ -210,7 +210,7 @@ def update_user_role(
 def soft_delete_user(
     user_id: str,
     db: Session = Depends(get_db),
-#    _: Usuario = Depends(get_admin_user),
+    current_user: Usuario = Depends(get_current_user),
 ):
     current_role = _get_role_or_403(current_user, db, 50)
 
@@ -222,8 +222,8 @@ def soft_delete_user(
 
     if current_role.prioridad < 100:
         user_role = db.query(Role).filter(Role.id == usuario.role_id).first()
-        if user_role and user_role.prioridad >= current_role.prioridad:
-            raise HTTPException(status_code=403, detail="No puedes eliminar usuarios con un rol igual o superior al tuyo")
+        if user_role and user_role.prioridad >= 100:
+            raise HTTPException(status_code=403, detail="No puedes eliminar usuarios con rol de administrador")
 
     usuario.is_active = False
     db.commit()
@@ -260,8 +260,8 @@ def request_reset_2fa(
 
     if current_role.prioridad < 100:
         user_role = db.query(Role).filter(Role.id == usuario.role_id).first()
-        if user_role and user_role.prioridad >= current_role.prioridad:
-            raise HTTPException(status_code=403, detail="No puedes iniciar un reset de 2FA para usuarios con un rol igual o superior al tuyo")
+        if user_role and user_role.prioridad >= 100:
+            raise HTTPException(status_code=403, detail="No puedes iniciar un reset de 2FA para usuarios con rol de administrador")
 
     access_request = AccessRequest(
         email=usuario.email,
@@ -297,8 +297,8 @@ def reset_2fa(
 
     if current_role.prioridad < 100:
         user_role = db.query(Role).filter(Role.id == usuario.role_id).first()
-        if user_role and user_role.prioridad >= current_role.prioridad:
-            raise HTTPException(status_code=403, detail="No puedes resetear el 2FA de usuarios con un rol igual o superior al tuyo")
+        if user_role and user_role.prioridad >= 100:
+            raise HTTPException(status_code=403, detail="No puedes resetear el 2FA de usuarios con rol de administrador")
 
     # Registro histórico del reset — no se toca ningún registro anterior
     db.add(AccessRequest(

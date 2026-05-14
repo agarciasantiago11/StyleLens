@@ -142,7 +142,7 @@ export default function AdminPanelScreen() {
   const renderUser = ({ item }: { item: UserItem }) => {
     const isSelf = item.id === currentUser?.id;
     const currentUserPriority = currentUser?.role_priority ?? 0;
-    const canModify = !isSelf && (currentUserPriority >= 100 || item.role_prioridad < currentUserPriority);
+    const canModify = !isSelf && (currentUserPriority >= 100 || item.role_prioridad < 100);
 
     return (
       <View style={[styles.userCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>

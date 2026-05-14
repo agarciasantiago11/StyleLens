@@ -15,7 +15,7 @@ import { useAppTheme } from "@/contexts/app-theme";
 import { useAuthStore } from "@/store/authStore";
 import apiClient from "@/api/client";
 
-const ADMIN_PRIORITY = 100;
+const ADMIN_PRIORITY = 50;
 
 const SIDEBAR_WIDTH = 300;
 
