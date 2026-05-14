@@ -214,7 +214,7 @@ export default function StylensScreen() {
       if (!permission.granted) return;
       const result = await ImagePicker.launchImageLibraryAsync({
         quality: 1,
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: "images",
       });
       if (!result.canceled) {
         setSelectedImage(result.assets[0].uri);

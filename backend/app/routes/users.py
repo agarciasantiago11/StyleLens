@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from app.database import get_db
 from app.models import Usuario, Role, AccessRequest
 from app.auth_deps import get_current_user
@@ -96,13 +98,15 @@ def register_user(
     body: RegisterUserBody,
     db: Session = Depends(get_db),
 ):
-    if db.query(Usuario).filter(Usuario.email == body.email).first():
+    normalized_email = body.email.strip().lower()
+
+    if db.query(Usuario).filter(Usuario.email == normalized_email).first():
         raise HTTPException(status_code=400, detail="El email ya está registrado")
 
     access_request = (
         db.query(AccessRequest)
         .filter(
-            AccessRequest.email == body.email,
+            AccessRequest.email == normalized_email,
             AccessRequest.message == "register request",
             AccessRequest.status == "verified",
         )
@@ -112,21 +116,32 @@ def register_user(
     if not access_request:
         raise HTTPException(status_code=400, detail="OTP no verificado o solicitud expirada")
 
-    user_role = db.query(Role).filter(Role.nombre == "user").first()
+    user_role = (
+        db.query(Role)
+        .filter(func.lower(Role.nombre).in_(["user", "usuario"]))
+        .order_by(Role.prioridad.asc())
+        .first()
+    )
     if not user_role:
-        raise HTTPException(status_code=500, detail="No existe el rol 'user' en la tabla roles")
+        user_role = db.query(Role).order_by(Role.prioridad.asc()).first()
+    if not user_role:
+        raise HTTPException(status_code=500, detail="No existe ningún rol configurado en la tabla roles")
 
     hashed_pw = bcrypt.hashpw(body.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-    db.add(Usuario(
-        nombre_completo=body.nombre_usuario,
-        email=body.email,
-        password_hash=hashed_pw,
-        role_id=user_role.id,
-        is_active=True,
-    ))
-    access_request.status = "accepted"
-    db.commit()
+    try:
+        db.add(Usuario(
+            nombre_completo=body.nombre_usuario.strip(),
+            email=normalized_email,
+            password_hash=hashed_pw,
+            role_id=user_role.id,
+            is_active=True,
+        ))
+        access_request.status = "accepted"
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al registrar usuario: {exc}") from exc
 
     return {"message": "Usuario registrado con éxito"}
 
@@ -200,6 +215,22 @@ def soft_delete_user(
     usuario.is_active = False
     db.commit()
     return {"message": "Usuario desactivado correctamente"}
+
+
+@router.delete("/me/delete")
+def soft_delete_me(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    usuario = db.query(Usuario).filter(Usuario.id == current_user.id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    usuario.is_active = False
+    usuario.token = None
+    usuario.token_expiration = None
+    db.commit()
+    return {"message": "Cuenta eliminada correctamente"}
 
 
 @router.post("/{user_id}/request-reset-2fa")

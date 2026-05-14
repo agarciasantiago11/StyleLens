@@ -10,23 +10,29 @@ import {
 	Animated,
 	ActivityIndicator,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { ThemedText } from "@/components/themed-text";
 import { useAppTheme } from "@/contexts/app-theme";
 import { PublicOnlyRoute } from "@/lib/auth-guards";
 import apiClient from "@/api/client";
 
+type RegisterStep = "form" | "otp" | "result";
+
 export default function RegistroPage() {
 	const router = useRouter();
 	const { theme } = useAppTheme();
 
+	const [step, setStep] = useState<RegisterStep>("form");
 	const [username, setUsername] = useState("");
 	const [email, setEmail] = useState("");
+	const [confirmEmail, setConfirmEmail] = useState("");
 	const [password, setPassword] = useState("");
+	const [confirmPassword, setConfirmPassword] = useState("");
 	const [otp, setOtp] = useState("");
+	const [registerSuccess, setRegisterSuccess] = useState<boolean | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [errorMessage, setErrorMessage] = useState("");
-	const [isOtpStep, setIsOtpStep] = useState(false);
 	const fadeAnim = useRef(new Animated.Value(0)).current;
 	const translateAnim = useRef(new Animated.Value(12)).current;
 
@@ -37,11 +43,38 @@ export default function RegistroPage() {
 	const mutedColor = theme.textMuted;
 
 	const onRegisterPress = async () => {
-		void username;
-		void password;
+		if (!username.trim()) {
+			setErrorMessage("El nombre de usuario es obligatorio.");
+			return;
+		}
 
 		if (!email.trim()) {
 			setErrorMessage("El correo electrónico es obligatorio.");
+			return;
+		}
+
+		if (!confirmEmail.trim()) {
+			setErrorMessage("Repite tu correo electrónico.");
+			return;
+		}
+
+		if (email.trim().toLowerCase() !== confirmEmail.trim().toLowerCase()) {
+			setErrorMessage("Los correos electrónicos no coinciden.");
+			return;
+		}
+
+		if (!password) {
+			setErrorMessage("La contraseña es obligatoria.");
+			return;
+		}
+
+		if (!confirmPassword) {
+			setErrorMessage("Repite tu contraseña.");
+			return;
+		}
+
+		if (password !== confirmPassword) {
+			setErrorMessage("Las contraseñas no coinciden.");
 			return;
 		}
 
@@ -52,7 +85,7 @@ export default function RegistroPage() {
 			await apiClient.post("/api/v1/auth/request-register-otp", {
 				email: email.trim(),
 			});
-			setIsOtpStep(true);
+			setStep("otp");
 		} catch (error: unknown) {
 			const detail =
 				typeof error === "object" && error !== null && "response" in error
@@ -86,13 +119,11 @@ export default function RegistroPage() {
 				password,
 			});
 
-			router.replace("/sign-in");
+			setRegisterSuccess(true);
+			setStep("result");
 		} catch (error: unknown) {
-			const detail =
-				typeof error === "object" && error !== null && "response" in error
-					? (error as any).response?.data?.detail
-					: null;
-			setErrorMessage(detail || "No se pudo verificar el código. Inténtalo de nuevo.");
+			setRegisterSuccess(false);
+			setStep("result");
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -138,7 +169,7 @@ export default function RegistroPage() {
 							<ThemedText style={[styles.closeButtonText, { color: theme.onAccent }]}>Volver</ThemedText>
 						</TouchableOpacity>
 
-						{!isOtpStep ? (
+						{step === "form" ? (
 							<>
 								<ThemedText type="title" style={[styles.title, { color: theme.textPrimary }]}>Crear cuenta</ThemedText>
 								<ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>Regístrate para empezar a usar Stylens.</ThemedText>
@@ -171,6 +202,20 @@ export default function RegistroPage() {
 								</View>
 
 								<View style={[styles.inputGroup, { backgroundColor: inputSurface, borderColor: inputBorder }]}>
+									<ThemedText style={[styles.inputLabel, { color: labelColor }]}>Repite tu correo electrónico</ThemedText>
+									<TextInput
+										style={[styles.input, { color: textColor }]}
+										value={confirmEmail}
+										placeholder="usuario@ejemplo.com"
+										placeholderTextColor={mutedColor}
+										autoCapitalize="none"
+										keyboardType="email-address"
+										textContentType="emailAddress"
+										onChangeText={setConfirmEmail}
+									/>
+								</View>
+
+								<View style={[styles.inputGroup, { backgroundColor: inputSurface, borderColor: inputBorder }]}>
 									<ThemedText style={[styles.inputLabel, { color: labelColor }]}>Contraseña</ThemedText>
 									<TextInput
 										style={[styles.input, { color: textColor }]}
@@ -180,6 +225,19 @@ export default function RegistroPage() {
 										secureTextEntry
 										textContentType="newPassword"
 										onChangeText={setPassword}
+									/>
+								</View>
+
+								<View style={[styles.inputGroup, { backgroundColor: inputSurface, borderColor: inputBorder }]}>
+									<ThemedText style={[styles.inputLabel, { color: labelColor }]}>Repite tu contraseña</ThemedText>
+									<TextInput
+										style={[styles.input, { color: textColor }]}
+										value={confirmPassword}
+										placeholder="••••••••"
+										placeholderTextColor={mutedColor}
+										secureTextEntry
+										textContentType="newPassword"
+										onChangeText={setConfirmPassword}
 									/>
 								</View>
 
@@ -199,7 +257,9 @@ export default function RegistroPage() {
 									)}
 								</TouchableOpacity>
 							</>
-						) : (
+						) : null}
+
+						{step === "otp" ? (
 							<>
 								<ThemedText type="title" style={[styles.title, { color: theme.textPrimary }]}>Verifica tu correo</ThemedText>
 								<ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>Introduce el código OTP enviado a {email.trim()}.</ThemedText>
@@ -234,7 +294,40 @@ export default function RegistroPage() {
 									)}
 								</TouchableOpacity>
 							</>
-						)}
+						) : null}
+
+						{step === "result" ? (
+							<>
+								<View style={styles.resultWrap}>
+									<Ionicons
+										name={registerSuccess ? "checkmark-circle" : "close-circle"}
+										size={68}
+										color={registerSuccess ? "#22c55e" : "#ef4444"}
+									/>
+									<ThemedText type="title" style={[styles.title, { color: theme.textPrimary }]}>Estado del registro</ThemedText>
+									<ThemedText style={[styles.resultText, { color: theme.textSecondary }]}>
+										{registerSuccess ? "registro completado" : "Algo falló, vuelva a intentarlo más tarde."}
+									</ThemedText>
+								</View>
+
+								<TouchableOpacity
+									style={[styles.registerButton, { backgroundColor: theme.accent }]}
+									onPress={() => {
+										if (registerSuccess) {
+											router.replace("/sign-in");
+											return;
+										}
+										setStep("form");
+										setErrorMessage("");
+										setOtp("");
+									}}
+								>
+									<ThemedText style={[styles.registerButtonText, { color: theme.onAccent }]}>
+										{registerSuccess ? "Ir a iniciar sesión" : "Volver a intentar"}
+									</ThemedText>
+								</TouchableOpacity>
+							</>
+						) : null}
 					</View>
 				</Animated.View>
 			</KeyboardAvoidingView>
@@ -305,6 +398,16 @@ const styles = StyleSheet.create({
 	errorText: {
 		marginBottom: 12,
 		fontSize: 14,
+	},
+	resultWrap: {
+		alignItems: "center",
+		gap: 10,
+		marginBottom: 10,
+	},
+	resultText: {
+		fontSize: 15,
+		textAlign: "center",
+		lineHeight: 22,
 	},
 	registerButton: {
 		marginTop: 4,
