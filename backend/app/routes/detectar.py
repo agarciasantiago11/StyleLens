@@ -25,7 +25,7 @@ from app.schemas import (
     DeteccionCreadaInfo,
     PrendaResponse,
 )
-from app.services import cloudinary_service, serpapi_service, yolo_service
+from app.services import cloudinary_service, fashionclip_service, serpapi_service, yolo_service
 
 CLASES_YOLO = {
     "short_sleeved_shirt":   {"categoria": "prendas_superiores", "subcategoria": "camisetas"},
@@ -62,6 +62,46 @@ def _map_clase(clase: str) -> tuple[str, str]:
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+UMBRAL_DISTANCIA_VECTORIAL = 0.10  # cosine distance: 0=idéntico, 1=ortogonal
+TOP_K_VECTORIAL = 5
+
+
+def _buscar_por_vector(
+    db: Session,
+    embedding: list[float],
+    categoria: str,
+    price_min: Optional[float],
+    price_max: Optional[float],
+) -> list[tuple[Prenda, float]]:
+    """
+    Busca prendas similares en la subtabla JTI correspondiente usando cosine distance
+    sobre embeddings FashionCLIP. Retorna lista de (prenda, similitud_score) donde
+    similitud_score ∈ [0, 1], ordenada de mayor a menor similitud.
+    """
+    modelo = _CATEGORIA_MODEL.get(categoria)
+    if modelo is None:
+        return []
+
+    distancia_expr = modelo.embedding.cosine_distance(embedding)
+
+    q = (
+        db.query(modelo, distancia_expr.label("distancia"))
+        .filter(modelo.embedding.isnot(None))
+        .filter(distancia_expr <= UMBRAL_DISTANCIA_VECTORIAL)
+    )
+
+    if price_min is not None:
+        q = q.filter(modelo.precio >= price_min)
+    if price_max is not None:
+        q = q.filter(modelo.precio <= price_max)
+
+    q = q.order_by(distancia_expr).limit(TOP_K_VECTORIAL)
+
+    return [
+        (prenda, round(1.0 - float(distancia), 4))
+        for prenda, distancia in q.all()
+    ]
+
 
 def _procesar_recorte(
     db: Session,
@@ -86,8 +126,8 @@ def _procesar_recorte(
     categoria, subcategoria = _map_clase(clase)
     modelo = _CATEGORIA_MODEL.get(categoria, Prenda)
 
+    # ── 1. Caché por hash de imagen ──────────────────────────────────────────
     prendas_all = db.query(Prenda).filter(Prenda.imagen_hash == imagen_hash_recorte).all()
-    desde_cache = bool(prendas_all)
 
     if prendas_all:
         recorte_url = prendas_all[0].cloudinary_url or ""
@@ -100,39 +140,77 @@ def _procesar_recorte(
             prendas = q.all()
         else:
             prendas = prendas_all
+        desde_cache = True
+        fuente_resultado = "cache"
+        similitud_scores: dict = {}
+
     else:
-        nombre_cloud = f"{imagen_hash_recorte[:16]}_{clase}"
-        try:
-            recorte_url = cloudinary_service.subir_imagen(recorte_bytes, nombre=nombre_cloud)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error al subir imagen: {str(e)}")
-
-        try:
-            resultados_serp = serpapi_service.buscar_por_imagen(recorte_url)
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=f"Error al consultar SerpAPI: {str(e)}")
-
+        # ── 2. Embedding FashionCLIP + búsqueda vectorial ────────────────────
+        embedding = fashionclip_service.generar_embedding(recorte_bytes)
         prendas = []
-        for r in resultados_serp:
-            precio = r["precio"]
-            if price_min is not None and precio is not None and precio < price_min:
-                continue
-            if price_max is not None and precio is not None and precio > price_max:
-                continue
-            prenda = modelo(
-                nombre=r["nombre"],
-                categoria=categoria,
-                subcategoria=subcategoria,
-                tienda=r["tienda"],
-                precio=precio,
-                imagen_url=r["imagen_url"],
-                link=r["link"],
-                imagen_hash=imagen_hash_recorte,
-                cloudinary_url=recorte_url,
-            )
-            db.add(prenda)
-            prendas.append(prenda)
+        desde_cache = False
+        fuente_resultado = "serpapi"
+        similitud_scores = {}
+        recorte_url = ""
 
+        logger.info("DEBUG embedding generado: %s | categoria=%s", embedding is not None, categoria)
+        if embedding is not None:
+            vector_results = _buscar_por_vector(db, embedding, categoria, price_min, price_max)
+            logger.info("DEBUG vector_results count: %d", len(vector_results))
+            if vector_results:
+                prendas = [p for p, _ in vector_results]
+                similitud_scores = {p.id: s for p, s in vector_results}
+                fuente_resultado = "vectorial"
+                logger.info(
+                    "Vector search: %d coincidencias para clase=%s (top sim=%.3f)",
+                    len(prendas), clase, vector_results[0][1],
+                )
+
+        if prendas:
+            # Subir recorte a Cloudinary para deteccion.recorte_url (best-effort)
+            nombre_cloud = f"{imagen_hash_recorte[:16]}_{clase}"
+            try:
+                recorte_url = cloudinary_service.subir_imagen(recorte_bytes, nombre=nombre_cloud)
+            except Exception:
+                recorte_url = prendas[0].cloudinary_url or ""
+        else:
+            # ── 3. Fallback SerpAPI ──────────────────────────────────────────
+            nombre_cloud = f"{imagen_hash_recorte[:16]}_{clase}"
+            try:
+                recorte_url = cloudinary_service.subir_imagen(recorte_bytes, nombre=nombre_cloud)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error al subir imagen: {str(e)}")
+
+            try:
+                resultados_serp = serpapi_service.buscar_por_imagen(recorte_url)
+            except Exception as e:
+                raise HTTPException(status_code=502, detail=f"Error al consultar SerpAPI: {str(e)}")
+
+            for r in resultados_serp:
+                precio = r["precio"]
+                if price_min is not None and precio is not None and precio < price_min:
+                    continue
+                if price_max is not None and precio is not None and precio > price_max:
+                    continue
+                kwargs: dict = dict(
+                    nombre=r["nombre"],
+                    categoria=categoria,
+                    subcategoria=subcategoria,
+                    tienda=r["tienda"],
+                    precio=precio,
+                    imagen_url=r["imagen_url"],
+                    link=r["link"],
+                    imagen_hash=imagen_hash_recorte,
+                    cloudinary_url=recorte_url,
+                )
+                # Guardar embedding para futuras búsquedas vectoriales
+                if embedding is not None and modelo is not Prenda:
+                    kwargs["embedding"] = embedding
+                prenda = modelo(**kwargs)
+                db.add(prenda)
+                prendas.append(prenda)
+
+    # ── Crear / actualizar Deteccion ─────────────────────────────────────────
     if deteccion_existente is not None:
         deteccion = deteccion_existente
         deteccion.clase = clase
@@ -164,7 +242,8 @@ def _procesar_recorte(
             deteccion_id=deteccion.id,
             prenda_id=prenda.id,
             rank=rank,
-            fuente="cache" if desde_cache else "serpapi",
+            similitud_score=similitud_scores.get(prenda.id),
+            fuente=fuente_resultado,
         ))
 
     return deteccion, prendas, desde_cache

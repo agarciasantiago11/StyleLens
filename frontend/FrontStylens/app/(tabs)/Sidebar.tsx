@@ -67,13 +67,13 @@ export default function Sidebar({
     Animated.timing(slideAnim, {
       toValue: 0,
       duration: 280,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
   } else {
     Animated.timing(slideAnim, {
       toValue: -SIDEBAR_WIDTH,
       duration: 220,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
   }
 }, [slideAnim, visible]);

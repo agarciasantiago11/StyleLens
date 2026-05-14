@@ -103,12 +103,12 @@ export default function RegistroPage() {
 			Animated.timing(fadeAnim, {
 				toValue: 1,
 				duration: 700,
-				useNativeDriver: true,
+				useNativeDriver: false,
 			}),
 			Animated.timing(translateAnim, {
 				toValue: 0,
 				duration: 700,
-				useNativeDriver: true,
+				useNativeDriver: false,
 			}),
 		]).start();
 	}, [fadeAnim, translateAnim]);
@@ -126,9 +126,8 @@ export default function RegistroPage() {
 				<Animated.View
 					style={[
 						styles.centeredContainer,
-						{ opacity: fadeAnim, transform: [{ translateY: translateAnim }] },
+						{ opacity: fadeAnim, transform: [{ translateY: translateAnim }], pointerEvents: "box-none" },
 					]}
-					pointerEvents="box-none"
 				>
 					<View style={[styles.card, { backgroundColor: theme.surfaceSoft, borderColor: theme.border }]}>
 						<TouchableOpacity
