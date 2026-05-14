@@ -100,7 +100,8 @@ def register_user(
 ):
     normalized_email = body.email.strip().lower()
 
-    if db.query(Usuario).filter(Usuario.email == normalized_email).first():
+    existing_user = db.query(Usuario).filter(Usuario.email == normalized_email).first()
+    if existing_user and existing_user.is_active:
         raise HTTPException(status_code=400, detail="El email ya está registrado")
 
     access_request = (
@@ -130,20 +131,32 @@ def register_user(
     hashed_pw = bcrypt.hashpw(body.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     try:
-        db.add(Usuario(
-            nombre_completo=body.nombre_usuario.strip(),
-            email=normalized_email,
-            password_hash=hashed_pw,
-            role_id=user_role.id,
-            is_active=True,
-        ))
+        if existing_user and not existing_user.is_active:
+            existing_user.nombre_completo = body.nombre_usuario.strip()
+            existing_user.password_hash = hashed_pw
+            existing_user.is_active = True
+            existing_user.token = None
+            existing_user.token_expiration = None
+            if not existing_user.role_id:
+                existing_user.role_id = user_role.id
+            message = "Usuario reactivado con éxito"
+        else:
+            db.add(Usuario(
+                nombre_completo=body.nombre_usuario.strip(),
+                email=normalized_email,
+                password_hash=hashed_pw,
+                role_id=user_role.id,
+                is_active=True,
+            ))
+            message = "Usuario registrado con éxito"
+
         access_request.status = "accepted"
         db.commit()
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al registrar usuario: {exc}") from exc
 
-    return {"message": "Usuario registrado con éxito"}
+    return {"message": message}
 
 
 @router.get("/list")
