@@ -14,4 +14,3 @@ cloudinary
 google-search-results
 numpy
 bcrypt
-python-jose[cryptography]

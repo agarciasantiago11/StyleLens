@@ -56,11 +56,11 @@ export function SignInBackgroundCarousel({ images }: SignInBackgroundCarouselPro
   }));
 
   if (slides.length === 0) {
-    return <View style={styles.emptyBackground} pointerEvents="none" />;
+    return <View style={[styles.emptyBackground, { pointerEvents: "none" }]} />;
   }
 
   return (
-    <View style={styles.container} pointerEvents="none">
+    <View style={[styles.container, { pointerEvents: "none" }]}>
       <Animated.View
         style={[
           styles.track,

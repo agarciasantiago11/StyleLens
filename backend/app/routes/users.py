@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from app.database import get_db
 from app.models import Usuario, Role, AccessRequest
 from app.auth_deps import get_current_user
@@ -96,13 +98,16 @@ def register_user(
     body: RegisterUserBody,
     db: Session = Depends(get_db),
 ):
-    if db.query(Usuario).filter(Usuario.email == body.email).first():
+    normalized_email = body.email.strip().lower()
+
+    existing_user = db.query(Usuario).filter(Usuario.email == normalized_email).first()
+    if existing_user and existing_user.is_active:
         raise HTTPException(status_code=400, detail="El email ya está registrado")
 
     access_request = (
         db.query(AccessRequest)
         .filter(
-            AccessRequest.email == body.email,
+            AccessRequest.email == normalized_email,
             AccessRequest.message == "register request",
             AccessRequest.status == "verified",
         )
@@ -112,23 +117,46 @@ def register_user(
     if not access_request:
         raise HTTPException(status_code=400, detail="OTP no verificado o solicitud expirada")
 
-    user_role = db.query(Role).filter(Role.nombre == "user").first()
+    user_role = (
+        db.query(Role)
+        .filter(func.lower(Role.nombre).in_(["user", "usuario"]))
+        .order_by(Role.prioridad.asc())
+        .first()
+    )
     if not user_role:
-        raise HTTPException(status_code=500, detail="No existe el rol 'user' en la tabla roles")
+        user_role = db.query(Role).order_by(Role.prioridad.asc()).first()
+    if not user_role:
+        raise HTTPException(status_code=500, detail="No existe ningún rol configurado en la tabla roles")
 
     hashed_pw = bcrypt.hashpw(body.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-    db.add(Usuario(
-        nombre_completo=body.nombre_usuario,
-        email=body.email,
-        password_hash=hashed_pw,
-        role_id=user_role.id,
-        is_active=True,
-    ))
-    access_request.status = "accepted"
-    db.commit()
+    try:
+        if existing_user and not existing_user.is_active:
+            existing_user.nombre_completo = body.nombre_usuario.strip()
+            existing_user.password_hash = hashed_pw
+            existing_user.is_active = True
+            existing_user.token = None
+            existing_user.token_expiration = None
+            if not existing_user.role_id:
+                existing_user.role_id = user_role.id
+            message = "Usuario reactivado con éxito"
+        else:
+            db.add(Usuario(
+                nombre_completo=body.nombre_usuario.strip(),
+                email=normalized_email,
+                password_hash=hashed_pw,
+                role_id=user_role.id,
+                is_active=True,
+            ))
+            message = "Usuario registrado con éxito"
 
-    return {"message": "Usuario registrado con éxito"}
+        access_request.status = "accepted"
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al registrar usuario: {exc}") from exc
+
+    return {"message": message}
 
 
 @router.get("/list")
@@ -152,7 +180,7 @@ def update_user_role(
     user_id: str,
     nuevo_role_id: int,
     db: Session = Depends(get_db),
- #   _: Usuario = Depends(get_admin_user),
+    current_user: Usuario = Depends(get_current_user),
 ):
     current_role = _get_role_or_403(current_user, db, 50)
 
@@ -168,10 +196,10 @@ def update_user_role(
 
     if current_role.prioridad < 100:
         user_current_role = db.query(Role).filter(Role.id == usuario.role_id).first()
-        if user_current_role and user_current_role.prioridad >= current_role.prioridad:
-            raise HTTPException(status_code=403, detail="No puedes modificar usuarios con un rol igual o superior al tuyo")
-        if target_role.prioridad > current_role.prioridad:
-            raise HTTPException(status_code=403, detail="No puedes asignar un rol superior al tuyo")
+        if user_current_role and user_current_role.prioridad >= 100:
+            raise HTTPException(status_code=403, detail="No puedes modificar usuarios con rol de administrador")
+        if target_role.prioridad >= 100:
+            raise HTTPException(status_code=403, detail="No puedes asignar el rol de administrador")
 
     usuario.role_id = nuevo_role_id
     db.commit()
@@ -182,7 +210,7 @@ def update_user_role(
 def soft_delete_user(
     user_id: str,
     db: Session = Depends(get_db),
-#    _: Usuario = Depends(get_admin_user),
+    current_user: Usuario = Depends(get_current_user),
 ):
     current_role = _get_role_or_403(current_user, db, 50)
 
@@ -194,12 +222,28 @@ def soft_delete_user(
 
     if current_role.prioridad < 100:
         user_role = db.query(Role).filter(Role.id == usuario.role_id).first()
-        if user_role and user_role.prioridad >= current_role.prioridad:
-            raise HTTPException(status_code=403, detail="No puedes eliminar usuarios con un rol igual o superior al tuyo")
+        if user_role and user_role.prioridad >= 100:
+            raise HTTPException(status_code=403, detail="No puedes eliminar usuarios con rol de administrador")
 
     usuario.is_active = False
     db.commit()
     return {"message": "Usuario desactivado correctamente"}
+
+
+@router.delete("/me/delete")
+def soft_delete_me(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    usuario = db.query(Usuario).filter(Usuario.id == current_user.id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    usuario.is_active = False
+    usuario.token = None
+    usuario.token_expiration = None
+    db.commit()
+    return {"message": "Cuenta eliminada correctamente"}
 
 
 @router.post("/{user_id}/request-reset-2fa")
@@ -216,8 +260,8 @@ def request_reset_2fa(
 
     if current_role.prioridad < 100:
         user_role = db.query(Role).filter(Role.id == usuario.role_id).first()
-        if user_role and user_role.prioridad >= current_role.prioridad:
-            raise HTTPException(status_code=403, detail="No puedes iniciar un reset de 2FA para usuarios con un rol igual o superior al tuyo")
+        if user_role and user_role.prioridad >= 100:
+            raise HTTPException(status_code=403, detail="No puedes iniciar un reset de 2FA para usuarios con rol de administrador")
 
     access_request = AccessRequest(
         email=usuario.email,
@@ -253,8 +297,8 @@ def reset_2fa(
 
     if current_role.prioridad < 100:
         user_role = db.query(Role).filter(Role.id == usuario.role_id).first()
-        if user_role and user_role.prioridad >= current_role.prioridad:
-            raise HTTPException(status_code=403, detail="No puedes resetear el 2FA de usuarios con un rol igual o superior al tuyo")
+        if user_role and user_role.prioridad >= 100:
+            raise HTTPException(status_code=403, detail="No puedes resetear el 2FA de usuarios con rol de administrador")
 
     # Registro histórico del reset — no se toca ningún registro anterior
     db.add(AccessRequest(

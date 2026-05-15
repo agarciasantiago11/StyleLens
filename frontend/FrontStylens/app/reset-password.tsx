@@ -10,6 +10,7 @@ import {
   Animated,
   ActivityIndicator,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import apiClient from "@/api/client";
@@ -17,7 +18,7 @@ import { ThemedText } from "@/components/themed-text";
 import { useAppTheme } from "@/contexts/app-theme";
 import { PublicOnlyRoute } from "@/lib/auth-guards";
 
-type ResetStep = "email" | "otp" | "newPassword";
+type ResetStep = "email" | "otp" | "newPassword" | "result";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -25,8 +26,11 @@ export default function ResetPasswordPage() {
 
   const [step, setStep] = useState<ResetStep>("email");
   const [email, setEmail] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [resetSuccess, setResetSuccess] = useState<boolean | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -44,12 +48,12 @@ export default function ResetPasswordPage() {
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(translateAnim, {
         toValue: 0,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
   }, [fadeAnim, translateAnim]);
@@ -57,6 +61,16 @@ export default function ResetPasswordPage() {
   const handleRequestOtp = async () => {
     if (!email.trim()) {
       setErrorMessage("El correo electrónico es obligatorio.");
+      return;
+    }
+
+    if (!confirmEmail.trim()) {
+      setErrorMessage("Repite tu correo electrónico.");
+      return;
+    }
+
+    if (email.trim().toLowerCase() !== confirmEmail.trim().toLowerCase()) {
+      setErrorMessage("Los correos electrónicos no coinciden.");
       return;
     }
 
@@ -113,6 +127,16 @@ export default function ResetPasswordPage() {
       return;
     }
 
+    if (!confirmNewPassword) {
+      setErrorMessage("Repite tu nueva contraseña.");
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setErrorMessage("Las contraseñas no coinciden.");
+      return;
+    }
+
     setErrorMessage("");
     setIsSubmitting(true);
 
@@ -121,13 +145,11 @@ export default function ResetPasswordPage() {
         email: email.trim(),
         new_password: newPassword,
       });
-      router.replace("/sign-in");
+      setResetSuccess(true);
+      setStep("result");
     } catch (error: unknown) {
-      const detail =
-        typeof error === "object" && error !== null && "response" in error
-          ? (error as any).response?.data?.detail
-          : null;
-      setErrorMessage(detail || "No se pudo actualizar la contraseña.");
+      setResetSuccess(false);
+      setStep("result");
     } finally {
       setIsSubmitting(false);
     }
@@ -146,9 +168,8 @@ export default function ResetPasswordPage() {
         <Animated.View
           style={[
             styles.centeredContainer,
-            { opacity: fadeAnim, transform: [{ translateY: translateAnim }] },
+            { opacity: fadeAnim, transform: [{ translateY: translateAnim }], pointerEvents: "box-none" },
           ]}
-          pointerEvents="box-none"
         >
           <View style={[styles.card, { backgroundColor: theme.surfaceSoft, borderColor: theme.border }]}>
             <TouchableOpacity
@@ -174,6 +195,20 @@ export default function ResetPasswordPage() {
                     keyboardType="email-address"
                     textContentType="emailAddress"
                     onChangeText={setEmail}
+                  />
+                </View>
+
+                <View style={[styles.inputGroup, { backgroundColor: inputSurface, borderColor: inputBorder }]}>
+                  <ThemedText style={[styles.inputLabel, { color: labelColor }]}>Repite tu correo electrónico</ThemedText>
+                  <TextInput
+                    style={[styles.input, { color: textColor }]}
+                    value={confirmEmail}
+                    placeholder="usuario@ejemplo.com"
+                    placeholderTextColor={mutedColor}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    textContentType="emailAddress"
+                    onChangeText={setConfirmEmail}
                   />
                 </View>
 
@@ -250,6 +285,19 @@ export default function ResetPasswordPage() {
                   />
                 </View>
 
+                <View style={[styles.inputGroup, { backgroundColor: inputSurface, borderColor: inputBorder }]}>
+                  <ThemedText style={[styles.inputLabel, { color: labelColor }]}>Repite tu nueva contraseña</ThemedText>
+                  <TextInput
+                    style={[styles.input, { color: textColor }]}
+                    value={confirmNewPassword}
+                    placeholder="••••••••"
+                    placeholderTextColor={mutedColor}
+                    secureTextEntry
+                    textContentType="newPassword"
+                    onChangeText={setConfirmNewPassword}
+                  />
+                </View>
+
                 {errorMessage ? (
                   <ThemedText style={[styles.errorText, { color: theme.danger }]}>{errorMessage}</ThemedText>
                 ) : null}
@@ -264,6 +312,38 @@ export default function ResetPasswordPage() {
                   ) : (
                     <ThemedText style={[styles.actionButtonText, { color: theme.onAccent }]}>Enviar</ThemedText>
                   )}
+                </TouchableOpacity>
+              </>
+            ) : null}
+
+            {step === "result" ? (
+              <>
+                <View style={styles.resultWrap}>
+                  <Ionicons
+                    name={resetSuccess ? "checkmark-circle" : "close-circle"}
+                    size={68}
+                    color={resetSuccess ? "#22c55e" : "#ef4444"}
+                  />
+                  <ThemedText type="title" style={[styles.title, { color: theme.textPrimary }]}>Estado del cambio</ThemedText>
+                  <ThemedText style={[styles.resultText, { color: theme.textSecondary }]}>
+                    {resetSuccess ? "Contraseña cambiada correctamente" : "No se pudo cambiar la contraseña, intente de nuevo."}
+                  </ThemedText>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: theme.accent }]}
+                  onPress={() => {
+                    if (resetSuccess) {
+                      router.replace("/sign-in");
+                      return;
+                    }
+                    setStep("newPassword");
+                    setErrorMessage("");
+                  }}
+                >
+                  <ThemedText style={[styles.actionButtonText, { color: theme.onAccent }]}>
+                    {resetSuccess ? "Ir a iniciar sesión" : "Volver a intentar"}
+                  </ThemedText>
                 </TouchableOpacity>
               </>
             ) : null}
@@ -336,6 +416,16 @@ const styles = StyleSheet.create({
   errorText: {
     marginBottom: 12,
     fontSize: 14,
+  },
+  resultWrap: {
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  resultText: {
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
   },
   actionButton: {
     marginTop: 4,

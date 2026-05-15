@@ -170,11 +170,11 @@ export default function StylensScreen() {
   }, [selectedImage]);
 
   const animateIn = (anim: Animated.Value) => {
-    Animated.spring(anim, { toValue: 1.07, useNativeDriver: true }).start();
+    Animated.spring(anim, { toValue: 1.07, useNativeDriver: false }).start();
   };
 
   const animateOut = (anim: Animated.Value) => {
-    Animated.spring(anim, { toValue: 1, useNativeDriver: true }).start();
+    Animated.spring(anim, { toValue: 1, useNativeDriver: false }).start();
   };
 
   const handleTakePhoto = () => {
@@ -214,7 +214,7 @@ export default function StylensScreen() {
       if (!permission.granted) return;
       const result = await ImagePicker.launchImageLibraryAsync({
         quality: 1,
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: "images",
       });
       if (!result.canceled) {
         setSelectedImage(result.assets[0].uri);
@@ -442,8 +442,7 @@ export default function StylensScreen() {
           {!isDesktopWeb && (
             <LinearGradient
               colors={["transparent", "rgba(0,0,0,0.45)"]}
-              style={styles.productImageOverlay}
-              pointerEvents="none"
+              style={[styles.productImageOverlay, { pointerEvents: "none" }]}
             />
           )}
           <TouchableOpacity

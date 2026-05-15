@@ -15,7 +15,7 @@ import { useAppTheme } from "@/contexts/app-theme";
 import { useAuthStore } from "@/store/authStore";
 import apiClient from "@/api/client";
 
-const ADMIN_PRIORITY = 100;
+const ADMIN_PRIORITY = 50;
 
 const SIDEBAR_WIDTH = 300;
 
@@ -67,13 +67,13 @@ export default function Sidebar({
     Animated.timing(slideAnim, {
       toValue: 0,
       duration: 280,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
   } else {
     Animated.timing(slideAnim, {
       toValue: -SIDEBAR_WIDTH,
       duration: 220,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
   }
 }, [slideAnim, visible]);

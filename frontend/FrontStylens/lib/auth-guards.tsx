@@ -47,7 +47,7 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
     return <Redirect href="/sign-in" />;
   }
 
-  if (user.role_priority < 100) {
+  if (user.role_priority < 50) {
     return <Redirect href="/" />;
   }
 
