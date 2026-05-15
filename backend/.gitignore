@@ -38,6 +38,5 @@ coverage.xml
 Thumbs.db
 
 # Models (weights can be large)
-*.pt
 *.pth
 *.onnx
