@@ -9,7 +9,10 @@ from app.database import engine, Base
 
 logger = logging.getLogger(__name__)
 
-# Crea las tablas nuevas si no existen todavía
+# Activa pgvector y crea las tablas si no existen
+with engine.connect() as conn:
+    conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    conn.commit()
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="StyleLens API", version="1.0")
 
