@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "FrontStylens",
-    "slug": "FrontStylens",
+    "slug": "stylens",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -9,9 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.stylens.frontstylens"
     },
     "android": {
+      "package": "com.stylens.frontstylens",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -43,6 +45,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6d58effd-867f-4e9c-ab2b-fb1b1736ae34"
+      }
+    },
+    "owner": "jpayan98s-organization"
   }
 }

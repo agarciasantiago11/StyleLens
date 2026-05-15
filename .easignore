@@ -1,0 +1,6 @@
+# Exclude backend from EAS upload context when building from frontend in monorepo
+backend/
+
+# Defensive: ignore any Python virtual environments
+.venv/
+**/.venv/
