@@ -15,3 +15,4 @@ google-search-results
 numpy
 bcrypt
 pytest
+resend
