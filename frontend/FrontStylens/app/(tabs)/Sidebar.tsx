@@ -6,10 +6,13 @@ import {
   StyleSheet,
   Modal,
   Animated,
+  ScrollView,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import AppLogo from "../../assets/images/android-icon-monochrome.png";
 import { useRouter } from "expo-router";
 import { useAppTheme } from "@/contexts/app-theme";
 import { useAuthStore } from "@/store/authStore";
@@ -100,7 +103,11 @@ export default function Sidebar({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                <Ionicons name="image-outline" size={20} color="#fff" />
+                <Image
+                  source={AppLogo}
+                  style={{ width: 28, height: 28, resizeMode: "contain" }}
+                  accessibilityLabel="Stylens logo"
+                />
               </LinearGradient>
               <View>
                 <Text style={[styles.logoTitle, { color: theme.textPrimary }]}>Stylens</Text>
@@ -111,7 +118,12 @@ export default function Sidebar({
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
             {/* Menu Items */}
-            <View style={styles.menuList}>
+            <ScrollView
+              style={styles.menuList}
+              contentContainerStyle={styles.menuListContent}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
               {MENU_ITEMS.filter((item) => !item.adminOnly || isAdmin).map((item) => (
                 <TouchableOpacity
                   key={item.label}
@@ -141,7 +153,7 @@ export default function Sidebar({
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
 
             {/* Logout */}
             <View style={styles.logoutContainer}>
@@ -217,8 +229,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
   },
   menuList: {
+    flex: 1,
     paddingTop: 16,
     paddingHorizontal: 12,
+  },
+  menuListContent: {
+    paddingBottom: 24,
   },
   menuItem: {
     flexDirection: "row",
@@ -238,10 +254,9 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   logoutContainer: {
-    position: "absolute",
-    bottom: 88,
-    width: "100%",
     paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 12,
   },
   logoutButton: {
     flexDirection: "row",
@@ -258,11 +273,10 @@ const styles = StyleSheet.create({
     color: "#ef4444",
   },
   footer: {
-    position: "absolute",
-    bottom: 32,
-    width: "100%",
     alignItems: "center",
     gap: 4,
+    paddingBottom: 20,
+    paddingTop: 2,
   },
   footerText: {
     fontSize: 13,

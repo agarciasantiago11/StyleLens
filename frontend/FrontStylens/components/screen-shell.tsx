@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAppTheme } from "@/contexts/app-theme";
+import StylensHeader from "./StylensHeader";
 
 type ScreenShellProps = {
   title: string;
@@ -16,23 +17,9 @@ export function ScreenShell({ title, children }: ScreenShellProps) {
   const { theme } = useAppTheme();
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.appBackground }]}>
-      <View style={[styles.header, { backgroundColor: theme.headerBackground, borderBottomColor: theme.border }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.push("/(tabs)" as any)}>
-          <Ionicons name="arrow-back" size={22} color={theme.textPrimary} />
-        </TouchableOpacity>
-
-        <View style={styles.logoContainer}>
-          <LinearGradient colors={theme.gradient} style={styles.logoIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-            <Ionicons name="image-outline" size={18} color={theme.onAccent} />
-          </LinearGradient>
-          <Text style={[styles.logoText, { color: theme.textPrimary }]}>Stylens</Text>
-        </View>
-
-        <Text style={[styles.version, { color: theme.textMuted }]}>v1.0</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={[styles.content, { backgroundColor: theme.appBackground }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.appBackground }]}> 
+      <StylensHeader onBack={() => router.push("/(tabs)" as any)} />
+      <ScrollView contentContainerStyle={[styles.content, { backgroundColor: theme.appBackground }]}> 
         <Text style={[styles.title, { color: theme.textPrimary }]}>{title}</Text>
         {children}
       </ScrollView>

@@ -18,6 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import Sidebar from "./Sidebar";
 import { StatusBar } from "expo-status-bar";
+import AppLogo from "../../assets/images/android-icon-monochrome.png";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -90,6 +91,27 @@ const formatPrice = (value: number | string | null | undefined) => {
   return "Precio no disponible";
 };
 
+const YOLO_CLASS_LABELS: Record<string, string> = {
+  short_sleeved_shirt: "camiseta de manga corta",
+  long_sleeved_shirt: "camiseta de manga larga",
+  vest: "chaleco",
+  sling: "top de tirantes",
+  short_sleeved_outwear: "chaqueta o abrigo de manga corta",
+  long_sleeved_outwear: "chaqueta o abrigo de manga larga",
+  shorts: "pantalones cortos",
+  trousers: "pantalones",
+  skirt: "falda",
+  short_sleeved_dress: "vestido de manga corta",
+  long_sleeved_dress: "vestido de manga larga",
+  vest_dress: "vestido tipo chaleco",
+  sling_dress: "vestido de tirantes",
+};
+
+const translateYoloClass = (clase: string) => {
+  const normalized = clase.trim().toLowerCase();
+  return (YOLO_CLASS_LABELS[normalized] ?? normalized.replace(/_/g, " ")).toUpperCase();
+};
+
 const mapBackendProducts = (items: BackendPrenda[] = []): Product[] => {
   return items.map((item, index) => ({
     id: item.id ?? index + 1,
@@ -130,6 +152,8 @@ export default function StylensScreen() {
   const [hideTips, setHideTips] = useState(false);
   const [favoritePendingIds, setFavoritePendingIds] = useState<string[]>([]);
   const { theme } = useAppTheme();
+  const detectionBorderColor = theme.accent;
+  const detectionActiveBorderColor = theme.accentSoftStrong;
   const token = useAuthStore((state) => state.token);
   const scaleCamera = useRef(new Animated.Value(1)).current;
   const scaleGallery = useRef(new Animated.Value(1)).current;
@@ -499,7 +523,7 @@ export default function StylensScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.appBackground }]}>
-      <StatusBar style="light" backgroundColor={theme.headerBackground} translucent={false} />
+      <StatusBar style="light" backgroundColor="#000000" translucent={false} />
 
         {/* Header */}
         <View style={[styles.header, { backgroundColor: theme.headerBackground, borderBottomColor: theme.border }]}>
@@ -514,7 +538,11 @@ export default function StylensScreen() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Ionicons name="image-outline" size={20} color="#fff" />
+              <Image
+                source={AppLogo}
+                style={{ width: 24, height: 24, resizeMode: "contain" }}
+                accessibilityLabel="Stylens logo"
+              />
             </LinearGradient>
             <Text style={[styles.logoText, { color: theme.textPrimary }]}>Stylens</Text>
           </View>
@@ -680,13 +708,16 @@ export default function StylensScreen() {
                 if (!boxStyle) return null;
 
                 const isSelected = selectedBoxId === box.id;
+                const translatedLabel = translateYoloClass(box.clase);
+                const labelFontSize = Math.max(9, Math.min(13, Math.round((boxStyle.width ?? 120) / 18)));
                 return (
                   <TouchableOpacity
                     key={box.id}
                     style={[
                       styles.detectedBox,
+                      { borderColor: detectionBorderColor },
                       boxStyle,
-                      isSelected && styles.detectedBoxActive,
+                      isSelected && { borderColor: detectionActiveBorderColor },
                     ]}
                     onPress={() => {
                       void handleDetectSelectedGarment(box);
@@ -694,8 +725,13 @@ export default function StylensScreen() {
                     activeOpacity={0.9}
                   >
                     <View style={styles.detectedBoxLabelWrap}>
-                      <Text style={styles.detectedBoxLabel} numberOfLines={1}>
-                        {box.clase}
+                      <Text
+                        style={[styles.detectedBoxLabel, { fontSize: labelFontSize }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.72}
+                      >
+                        {translatedLabel}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -1021,7 +1057,6 @@ const styles = StyleSheet.create({
   detectedBox: {
     position: "absolute",
     borderWidth: 3,
-    borderColor: "#22c55e",
     backgroundColor: "transparent",
     borderRadius: 12,
     overflow: "hidden",
@@ -1029,22 +1064,21 @@ const styles = StyleSheet.create({
     minWidth: 44,
     minHeight: 44,
   },
-  detectedBoxActive: {
-    borderColor: "#f59e0b",
-    backgroundColor: "transparent",
-  },
   detectedBoxLabelWrap: {
     backgroundColor: "rgba(0,0,0,0.72)",
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 5,
-    alignSelf: "flex-start",
+    alignSelf: "stretch",
+    width: "100%",
     borderBottomRightRadius: 10,
   },
   detectedBoxLabel: {
     color: "#fff",
-    fontSize: 12,
     fontWeight: "700",
-    textTransform: "uppercase",
+    textTransform: "none",
+    textAlign: "center",
+    flexShrink: 1,
+    lineHeight: 15,
   },
   previewActions: {
     flexDirection: "row",

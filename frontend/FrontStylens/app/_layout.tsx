@@ -3,7 +3,9 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { useEffect, useState } from 'react';
+import { Platform, View, StatusBar as RNStatusBar } from 'react-native';
 
 import { AppThemeProvider } from '@/contexts/app-theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -48,33 +50,49 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AppThemeProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="registro"
-              options={{
-                headerShown: false,
-                presentation: 'transparentModal',
-                animation: 'fade',
-                contentStyle: { backgroundColor: 'transparent' },
-              }}
-            />
-            <Stack.Screen
-              name="reset-password"
-              options={{
-                headerShown: false,
-                presentation: 'transparentModal',
-                animation: 'fade',
-                contentStyle: { backgroundColor: 'transparent' },
-              }}
-            />
-          </Stack>
-          <StatusBar style="auto" />
-        </ThemeProvider>
-      </AppThemeProvider>
+      <View style={{ flex: 1, backgroundColor: '#000000' }}>
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) : 0,
+            backgroundColor: '#000000',
+            zIndex: 999,
+          }}
+        />
+        <AppThemeProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <BottomSheetModalProvider>
+              <Stack>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="registro"
+                  options={{
+                    headerShown: false,
+                    presentation: 'transparentModal',
+                    animation: 'fade',
+                    contentStyle: { backgroundColor: 'transparent' },
+                  }}
+                />
+                <Stack.Screen
+                  name="reset-password"
+                  options={{
+                    headerShown: false,
+                    presentation: 'transparentModal',
+                    animation: 'fade',
+                    contentStyle: { backgroundColor: 'transparent' },
+                  }}
+                />
+              </Stack>
+              <StatusBar style="light" backgroundColor="#000000" translucent={false} />
+            </BottomSheetModalProvider>
+          </ThemeProvider>
+        </AppThemeProvider>
+      </View>
     </GestureHandlerRootView>
   );
 }

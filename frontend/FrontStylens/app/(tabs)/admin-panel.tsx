@@ -36,6 +36,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useAppTheme } from "@/contexts/app-theme";
+import StylensHeader from "../../components/StylensHeader";
 import { useAuthStore } from "@/store/authStore";
 import apiClient from "@/api/client";
 
@@ -213,22 +214,12 @@ export default function AdminPanelScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: theme.appBackground }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.headerBackground, borderBottomColor: theme.border }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.push("/(tabs)" as any)}>
-          <Ionicons name="arrow-back" size={22} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <LinearGradient colors={theme.gradient} style={styles.headerIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-            <Ionicons name="shield-checkmark-outline" size={18} color="#fff" />
-          </LinearGradient>
-          <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Panel de Administrador</Text>
-        </View>
-        <TouchableOpacity onPress={onRefresh}>
-          <Ionicons name="refresh-outline" size={22} color={theme.textSecondary} />
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.appBackground }]}> 
+      <StylensHeader
+        title="Panel de Administrador"
+        onBack={() => router.push("/(tabs)" as any)}
+        onRefresh={onRefresh}
+      />
 
       {loading ? (
         <View style={styles.center}>

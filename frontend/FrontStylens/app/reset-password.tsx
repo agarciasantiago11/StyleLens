@@ -30,6 +30,8 @@ export default function ResetPasswordPage() {
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [resetSuccess, setResetSuccess] = useState<boolean | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -233,7 +235,7 @@ export default function ResetPasswordPage() {
             {step === "otp" ? (
               <>
                 <ThemedText type="title" style={[styles.title, { color: theme.textPrimary }]}>Verificar OTP</ThemedText>
-                <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>Introduce el código enviado a {email.trim()}.</ThemedText>
+                <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>Introduce el código enviado a {email.trim()}. Expira en 10 minutos.</ThemedText>
 
                 <View style={[styles.inputGroup, { backgroundColor: inputSurface, borderColor: inputBorder }]}>
                   <ThemedText style={[styles.inputLabel, { color: labelColor }]}>Código OTP</ThemedText>
@@ -274,28 +276,58 @@ export default function ResetPasswordPage() {
 
                 <View style={[styles.inputGroup, { backgroundColor: inputSurface, borderColor: inputBorder }]}>
                   <ThemedText style={[styles.inputLabel, { color: labelColor }]}>Nueva contraseña</ThemedText>
-                  <TextInput
-                    style={[styles.input, { color: textColor }]}
-                    value={newPassword}
-                    placeholder="••••••••"
-                    placeholderTextColor={mutedColor}
-                    secureTextEntry
-                    textContentType="newPassword"
-                    onChangeText={setNewPassword}
-                  />
+                  <View style={styles.passwordRow}>
+                    <TextInput
+                      style={[styles.input, styles.passwordInput, { color: textColor }]}
+                      value={newPassword}
+                      placeholder="••••••••"
+                      placeholderTextColor={mutedColor}
+                      secureTextEntry={!showNewPassword}
+                      textContentType="newPassword"
+                      onChangeText={setNewPassword}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowNewPassword((prev) => !prev)}
+                      style={styles.passwordToggleButton}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={showNewPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    >
+                      <Ionicons
+                        name={showNewPassword ? "eye-off-outline" : "eye-outline"}
+                        size={20}
+                        color={mutedColor}
+                      />
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <View style={[styles.inputGroup, { backgroundColor: inputSurface, borderColor: inputBorder }]}>
                   <ThemedText style={[styles.inputLabel, { color: labelColor }]}>Repite tu nueva contraseña</ThemedText>
-                  <TextInput
-                    style={[styles.input, { color: textColor }]}
-                    value={confirmNewPassword}
-                    placeholder="••••••••"
-                    placeholderTextColor={mutedColor}
-                    secureTextEntry
-                    textContentType="newPassword"
-                    onChangeText={setConfirmNewPassword}
-                  />
+                  <View style={styles.passwordRow}>
+                    <TextInput
+                      style={[styles.input, styles.passwordInput, { color: textColor }]}
+                      value={confirmNewPassword}
+                      placeholder="••••••••"
+                      placeholderTextColor={mutedColor}
+                      secureTextEntry={!showConfirmNewPassword}
+                      textContentType="newPassword"
+                      onChangeText={setConfirmNewPassword}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowConfirmNewPassword((prev) => !prev)}
+                      style={styles.passwordToggleButton}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={showConfirmNewPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    >
+                      <Ionicons
+                        name={showConfirmNewPassword ? "eye-off-outline" : "eye-outline"}
+                        size={20}
+                        color={mutedColor}
+                      />
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 {errorMessage ? (
@@ -412,6 +444,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     minHeight: 36,
     padding: 0,
+  },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  passwordInput: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  passwordToggleButton: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    minHeight: 36,
   },
   errorText: {
     marginBottom: 12,

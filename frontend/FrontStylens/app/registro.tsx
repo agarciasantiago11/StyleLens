@@ -29,6 +29,8 @@ export default function RegistroPage() {
 	const [confirmEmail, setConfirmEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
+	const [showPassword, setShowPassword] = useState(false);
+	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 	const [otp, setOtp] = useState("");
 	const [registerSuccess, setRegisterSuccess] = useState<boolean | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
@@ -216,28 +218,58 @@ export default function RegistroPage() {
 
 								<View style={[styles.inputGroup, { backgroundColor: inputSurface, borderColor: inputBorder }]}>
 									<ThemedText style={[styles.inputLabel, { color: labelColor }]}>Contraseña</ThemedText>
-									<TextInput
-										style={[styles.input, { color: textColor }]}
-										value={password}
-										placeholder="••••••••"
-										placeholderTextColor={mutedColor}
-										secureTextEntry
-										textContentType="newPassword"
-										onChangeText={setPassword}
-									/>
+									<View style={styles.passwordRow}>
+										<TextInput
+											style={[styles.input, styles.passwordInput, { color: textColor }]}
+											value={password}
+											placeholder="••••••••"
+											placeholderTextColor={mutedColor}
+											secureTextEntry={!showPassword}
+											textContentType="newPassword"
+											onChangeText={setPassword}
+										/>
+										<TouchableOpacity
+											onPress={() => setShowPassword((prev) => !prev)}
+											style={styles.passwordToggleButton}
+											hitSlop={8}
+											accessibilityRole="button"
+											accessibilityLabel={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+										>
+											<Ionicons
+												name={showPassword ? "eye-off-outline" : "eye-outline"}
+												size={20}
+												color={mutedColor}
+											/>
+										</TouchableOpacity>
+									</View>
 								</View>
 
 								<View style={[styles.inputGroup, { backgroundColor: inputSurface, borderColor: inputBorder }]}>
 									<ThemedText style={[styles.inputLabel, { color: labelColor }]}>Repite tu contraseña</ThemedText>
-									<TextInput
-										style={[styles.input, { color: textColor }]}
-										value={confirmPassword}
-										placeholder="••••••••"
-										placeholderTextColor={mutedColor}
-										secureTextEntry
-										textContentType="newPassword"
-										onChangeText={setConfirmPassword}
-									/>
+									<View style={styles.passwordRow}>
+										<TextInput
+											style={[styles.input, styles.passwordInput, { color: textColor }]}
+											value={confirmPassword}
+											placeholder="••••••••"
+											placeholderTextColor={mutedColor}
+											secureTextEntry={!showConfirmPassword}
+											textContentType="newPassword"
+											onChangeText={setConfirmPassword}
+										/>
+										<TouchableOpacity
+											onPress={() => setShowConfirmPassword((prev) => !prev)}
+											style={styles.passwordToggleButton}
+											hitSlop={8}
+											accessibilityRole="button"
+											accessibilityLabel={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+										>
+											<Ionicons
+												name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
+												size={20}
+												color={mutedColor}
+											/>
+										</TouchableOpacity>
+									</View>
 								</View>
 
 								{errorMessage ? (
@@ -261,7 +293,7 @@ export default function RegistroPage() {
 						{step === "otp" ? (
 							<>
 								<ThemedText type="title" style={[styles.title, { color: theme.textPrimary }]}>Verifica tu correo</ThemedText>
-								<ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>Introduce el código OTP enviado a {email.trim()}.</ThemedText>
+								<ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>Introduce el código OTP enviado a {email.trim()}. Expira en 10 minutos.</ThemedText>
 
 								<View style={[styles.inputGroup, { backgroundColor: inputSurface, borderColor: inputBorder }]}>
 									<ThemedText style={[styles.inputLabel, { color: labelColor }]}>Código OTP</ThemedText>
@@ -393,6 +425,20 @@ const styles = StyleSheet.create({
 		fontSize: 15,
 		minHeight: 36,
 		padding: 0,
+	},
+	passwordRow: {
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	passwordInput: {
+		flex: 1,
+		paddingRight: 8,
+	},
+	passwordToggleButton: {
+		justifyContent: "center",
+		alignItems: "center",
+		paddingHorizontal: 4,
+		minHeight: 36,
 	},
 	errorText: {
 		marginBottom: 12,

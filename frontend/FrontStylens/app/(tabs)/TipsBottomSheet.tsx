@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from "react-native";
-import BottomSheet, { BottomSheetScrollView, BottomSheetBackdrop } from "@gorhom/bottom-sheet";
+import { BottomSheetModal, BottomSheetScrollView, BottomSheetBackdrop } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAppTheme } from "@/contexts/app-theme";
@@ -68,12 +68,12 @@ type Props = {
 const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
   ({ onContinue, onBack }, ref) => {
     const { theme } = useAppTheme();
-    const bottomSheetRef = useRef<BottomSheet>(null);
+    const bottomSheetRef = useRef<BottomSheetModal>(null);
     const [dontShow, setDontShow] = React.useState(false);
 
     useImperativeHandle(ref, () => ({
-      open: () => bottomSheetRef.current?.expand(),
-      close: () => bottomSheetRef.current?.close(),
+      open: () => bottomSheetRef.current?.present(),
+      close: () => bottomSheetRef.current?.dismiss(),
     }));
 
     const renderBackdrop = useCallback(
@@ -84,9 +84,8 @@ const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
     );
 
     return (
-      <BottomSheet
+      <BottomSheetModal
         ref={bottomSheetRef}
-        index={-1}
         snapPoints={["92%"]}
         enablePanDownToClose
         backdropComponent={renderBackdrop}
@@ -157,7 +156,7 @@ const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
             <TouchableOpacity
               style={[styles.secondaryButton, { borderColor: theme.border }]}
               onPress={() => {
-                bottomSheetRef.current?.close();
+                bottomSheetRef.current?.dismiss();
                 onBack();
               }}
             >
@@ -167,7 +166,7 @@ const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
             <TouchableOpacity
               style={styles.primaryButton}
               onPress={() => {
-                bottomSheetRef.current?.close();
+                bottomSheetRef.current?.dismiss();
                 onContinue(dontShow);
                 setDontShow(false);
               }}
@@ -183,7 +182,7 @@ const TipsBottomSheet = forwardRef<TipsBottomSheetRef, Props>(
             </TouchableOpacity>
           </View>
         </BottomSheetScrollView>
-      </BottomSheet>
+      </BottomSheetModal>
     );
   }
 );

@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "@/contexts/app-theme";
 import { useAuthStore, AuthState } from '@/store/authStore';
 import apiClient from "@/api/client";
@@ -26,8 +27,8 @@ export default function SignInPage() {
   const setToken = useAuthStore((state: AuthState) => state.setToken);
   const setUser = useAuthStore((state: AuthState) => state.setUser);
   const heroColors = theme.gradient;
-  const inputSurface = "rgba(255,255,255,0.50)";
-  const inputBorder = "rgba(255,255,255,0.60)";
+  const inputSurface = "rgba(255,255,255,0.72)";
+  const inputBorder = "rgba(255,255,255,0.78)";
   const headingColor = "#22181f";
   const bodyColor = "rgba(44,31,41,0.9)";
   const labelColor = "rgba(34,24,31,0.92)";
@@ -35,6 +36,7 @@ export default function SignInPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -70,7 +72,8 @@ export default function SignInPage() {
 
       setToken(accessToken);
       setUser(profileResponse.data);
-      router.replace("/");
+      // La redirección la gestiona PublicOnlyRoute al detectar el token,
+      // evitando una doble navegación que congela el stack en Android.
     } catch (error: unknown) {
       const detail =
         typeof error === "object" && error !== null && "response" in error
@@ -159,36 +162,41 @@ export default function SignInPage() {
                 ]}
               >
                 <ThemedText style={[styles.inputLabel, { color: labelColor }]}>Contraseña</ThemedText>
-                <TextInput
-                  style={[styles.input, { color: headingColor }]}
-                  value={password}
-                  placeholder="••••••••"
-                  placeholderTextColor={mutedColor}
-                  secureTextEntry
-                  textContentType="password"
-                  onChangeText={setPassword}
-                />
+                <View style={styles.passwordRow}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput, { color: headingColor }]}
+                    value={password}
+                    placeholder="••••••••"
+                    placeholderTextColor={mutedColor}
+                    secureTextEntry={!showPassword}
+                    textContentType="password"
+                    onChangeText={setPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword((prev) => !prev)}
+                    style={styles.passwordToggleButton}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
+                    <Ionicons
+                      name={showPassword ? "eye-off-outline" : "eye-outline"}
+                      size={20}
+                      color={mutedColor}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {errorMessage ? (
-                <ThemedText style={[styles.errorText, { color: theme.danger }]}>
-                  {errorMessage}
-                </ThemedText>
+                <View style={styles.errorBox}>
+                  <ThemedText style={[styles.errorText, { color: theme.danger }]}>
+                    {errorMessage}
+                  </ThemedText>
+                </View>
               ) : null}
 
               <View style={styles.actionsRow}>
-                <TouchableOpacity
-                  style={[styles.button, styles.loginButton, { backgroundColor: theme.accent }]}
-                  onPress={handleLogin}
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <ActivityIndicator color={theme.onAccent} />
-                  ) : (
-                    <ThemedText style={[styles.buttonText, { color: theme.onAccent }]}>Entrar</ThemedText>
-                  )}
-                </TouchableOpacity>
-
                 <TouchableOpacity
                   style={[
                     styles.button,
@@ -202,6 +210,18 @@ export default function SignInPage() {
                   disabled={isSubmitting}
                 >
                   <ThemedText style={[styles.buttonText, { color: headingColor }]}>Registrarse</ThemedText>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.button, styles.loginButton, { backgroundColor: theme.accent }]}
+                  onPress={handleLogin}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator color={theme.onAccent} />
+                  ) : (
+                    <ThemedText style={[styles.buttonText, { color: theme.onAccent }]}>Entrar</ThemedText>
+                  )}
                 </TouchableOpacity>
               </View>
 
@@ -297,8 +317,28 @@ const styles = StyleSheet.create({
     minHeight: 36,
     padding: 0,
   },
-  errorText: {
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  passwordInput: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  passwordToggleButton: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    minHeight: 36,
+  },
+  errorBox: {
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     marginBottom: 16,
+  },
+  errorText: {
     fontSize: 14,
   },
   forgotPasswordButton: {
