@@ -44,6 +44,16 @@ def _get_model() -> YOLO:
     return _model
 
 
+def unload_model() -> None:
+    """Libera el modelo YOLO de memoria. Llamar tras inferencia para dejar RAM libre."""
+    global _model
+    if _model is not None:
+        del _model
+        _model = None
+        import gc
+        gc.collect()
+
+
 def _iter_detections(imagen: Image.Image) -> list[dict]:
     model = _get_model()
     results = model(imagen, verbose=False)

@@ -337,6 +337,8 @@ async def detectar_cajas(
     except Exception as e:
         logger.warning("Fallo en deteccion YOLO para cajas, se usa fallback: %s", str(e))
         cajas_detectadas = []
+    finally:
+        yolo_service.unload_model()
 
     if not cajas_detectadas:
         cajas_detectadas = [
@@ -486,6 +488,8 @@ async def detectar_prendas(
     except Exception as e:
         logger.warning("Fallo en deteccion YOLO, se usa fallback de imagen completa: %s", str(e))
         recortes = []
+    finally:
+        yolo_service.unload_model()
 
     if not recortes:
         recortes = [{
