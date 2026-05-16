@@ -1,24 +1,38 @@
 import os
 from html import escape
 from typing import Iterable
-import resend
+
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
 
 from app.config import ADMIN_EMAIL
 
-resend.api_key = os.getenv("RESEND_API_KEY", "")
-FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+_FROM_EMAIL = "stylensgarcijuanjesus@gmail.com"
+_FROM_NAME = "StyleLens"
+
+
+def _get_api() -> sib_api_v3_sdk.TransactionalEmailsApi:
+    api_key = os.getenv("BREVO_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("BREVO_API_KEY no configurado en las variables de entorno")
+    configuration = sib_api_v3_sdk.Configuration()
+    configuration.api_key["api-key"] = api_key
+    return sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
 
 
 def _send(to: str, subject: str, html: str, text: str) -> None:
-    if not resend.api_key:
-        raise RuntimeError("RESEND_API_KEY no configurado en las variables de entorno")
-    resend.Emails.send({
-        "from": FROM_EMAIL,
-        "to": to,
-        "subject": subject,
-        "html": html,
-        "text": text,
-    })
+    api = _get_api()
+    email = sib_api_v3_sdk.SendSmtpEmail(
+        to=[{"email": to}],
+        sender={"email": _FROM_EMAIL, "name": _FROM_NAME},
+        subject=subject,
+        html_content=html,
+        text_content=text,
+    )
+    try:
+        api.send_transac_email(email)
+    except ApiException as e:
+        raise RuntimeError(f"Brevo error: {e}")
 
 
 def send_otp_email(to_email: str, otp: str) -> None:
