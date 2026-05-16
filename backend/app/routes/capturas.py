@@ -24,6 +24,12 @@ def eliminar_historial(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    busqueda_ids = [r for (r,) in db.query(Busqueda.id).filter(Busqueda.usuario_id == current_user.id).all()]
+    if busqueda_ids:
+        deteccion_ids = [r for (r,) in db.query(Deteccion.id).filter(Deteccion.busqueda_id.in_(busqueda_ids)).all()]
+        if deteccion_ids:
+            db.query(Resultado).filter(Resultado.deteccion_id.in_(deteccion_ids)).delete(synchronize_session=False)
+        db.query(Deteccion).filter(Deteccion.busqueda_id.in_(busqueda_ids)).delete(synchronize_session=False)
     db.query(Favorito).filter(Favorito.usuario_id == current_user.id).delete(synchronize_session=False)
     db.query(Busqueda).filter(Busqueda.usuario_id == current_user.id).delete(synchronize_session=False)
     db.commit()
