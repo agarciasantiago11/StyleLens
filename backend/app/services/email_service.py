@@ -1,3 +1,4 @@
+import base64
 import os
 from html import escape
 from typing import Iterable
@@ -20,14 +21,33 @@ def _get_api() -> sib_api_v3_sdk.TransactionalEmailsApi:
     return sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
 
 
-def _send(to: str, subject: str, html: str, text: str) -> None:
+def _send(
+    to: str,
+    subject: str,
+    html: str,
+    text: str,
+    attachments: Iterable[tuple[str, bytes, str | None]] | None = None,
+) -> None:
     api = _get_api()
+
+    brevo_attachments = None
+    if attachments:
+        brevo_attachments = [
+            {
+                "name": filename,
+                "content": base64.b64encode(data).decode("utf-8"),
+            }
+            for filename, data, _content_type in attachments
+            if data
+        ] or None
+
     email = sib_api_v3_sdk.SendSmtpEmail(
         to=[{"email": to}],
         sender={"email": _FROM_EMAIL, "name": _FROM_NAME},
         subject=subject,
         html_content=html,
         text_content=text,
+        attachment=brevo_attachments,
     )
     try:
         api.send_transac_email(email)
@@ -113,4 +133,5 @@ def send_support_report_email(
           <p>{escape(safe_description).replace(chr(10), '<br/>')}</p>
         </body></html>
         """,
+        attachments=attachments,
     )

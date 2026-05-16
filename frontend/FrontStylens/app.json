@@ -1,22 +1,22 @@
 {
   "expo": {
-    "name": "FrontStylens",
+    "name": "Stylens",
     "slug": "stylens",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontstylens",
+    "scheme": "stylens",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.stylens.frontstylens",
+      "bundleIdentifier": "com.stylens.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.stylens.frontstylens",
+      "package": "com.stylens.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

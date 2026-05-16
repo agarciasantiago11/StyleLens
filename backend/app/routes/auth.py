@@ -206,9 +206,9 @@ def request_register_otp(body: OTPRequestBody, request: Request, db: Session = D
     # Mensaje genérico siempre: no leak de si el email existe o no.
     generic_response = {"message": "Si el email es válido, recibirás un código OTP de registro"}
 
-    # 1. Si el email ya está registrado, NO emitimos OTP (evita usar nuestro SMTP
-    #    para spamear emails ajenos). El mensaje al cliente sigue siendo genérico.
-    if db.query(Usuario).filter(Usuario.email == body.email).first():
+    # 1. Si el email ya está registrado y activo, NO emitimos OTP. Las cuentas
+    #    eliminadas (is_active=False) sí pueden re-registrarse.
+    if db.query(Usuario).filter(Usuario.email == body.email, Usuario.is_active == True).first():
         return generic_response
 
     # 2. Rate-limit por email: aunque rote IPs, no más de N OTPs/hora al mismo destino.
