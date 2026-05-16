@@ -1,5 +1,7 @@
+import gc
 import io
 import logging
+import os
 from typing import Optional
 
 from PIL import Image
@@ -7,6 +9,9 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 MODEL_NAME = "patrickjohncyh/fashion-clip"
+
+# Poner FASHIONCLIP_ENABLED=false en Railway para saltarse el modelo y evitar OOM.
+_ENABLED = os.getenv("FASHIONCLIP_ENABLED", "true").lower() not in {"0", "false", "no"}
 
 _model = None
 _processor = None
@@ -24,11 +29,24 @@ def _get_model():
     return _model, _processor
 
 
+def unload_model() -> None:
+    """Libera FashionCLIP de memoria tras cada inferencia."""
+    global _model, _processor
+    if _model is not None:
+        del _model
+        del _processor
+        _model = None
+        _processor = None
+        gc.collect()
+
+
 def generar_embedding(imagen_bytes: bytes) -> Optional[list[float]]:
     """
     Genera embedding normalizado de 512 dimensiones para una imagen de prenda.
-    Retorna None si el modelo falla (degradación suave, no bloquea el flujo principal).
+    Retorna None si el modelo está desactivado o falla (degradación suave).
     """
+    if not _ENABLED:
+        return None
     try:
         import torch
         model, processor = _get_model()
