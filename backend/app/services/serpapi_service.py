@@ -104,6 +104,11 @@ def buscar_por_imagen(imagen_url: str) -> list[dict]:
     resultados = []
     for match in source_matches[:MAX_RESULTS]:
         precio = _extraer_precio(match.get("price"))
+        if precio is None:
+            precio = _buscar_precio_en_shopping(
+                titulo=match.get("title") or "",
+                dominio_esperado=_extract_domain(match.get("link")),
+            )
         resultados.append({
             "nombre": match.get("title") or "Sin nombre",
             "tienda": match.get("source") or "",
@@ -174,6 +179,57 @@ def _rank_match(match: dict) -> int:
         score += 3
 
     return score
+
+
+def _buscar_precio_en_shopping(titulo: str, dominio_esperado: str = "") -> float | None:
+    """
+    Llamada secundaria a SerpAPI con engine=google_shopping para enriquecer el
+    precio de un visual match que no lo trajo. Prioriza resultados del mismo
+    dominio que el match original; si no hay, acepta el primer precio numérico.
+
+    Coste: hasta MAX_RESULTS llamadas extra por búsqueda en el peor caso.
+    """
+    if not titulo or not titulo.strip():
+        return None
+
+    params = {
+        "engine": "google_shopping",
+        "q": titulo.strip(),
+        "gl": COUNTRY,
+        "hl": LANGUAGE,
+        "api_key": os.getenv("SERPAPI_KEY"),
+    }
+
+    try:
+        datos = GoogleSearch(params).get_dict()
+    except Exception as exc:
+        logger.warning("SerpAPI google_shopping fallo para '%s': %s", titulo, exc)
+        return None
+
+    shopping_results = datos.get("shopping_results") or []
+    if not shopping_results:
+        return None
+
+    # 1) Preferir coincidencia exacta del dominio del visual match
+    if dominio_esperado:
+        for r in shopping_results:
+            r_domain = _extract_domain(r.get("link"))
+            if _matches_domain_set(r_domain, {dominio_esperado}):
+                precio = _extraer_precio(r.get("extracted_price"))
+                if precio is None:
+                    precio = _extraer_precio(r.get("price"))
+                if precio is not None:
+                    return precio
+
+    # 2) Fallback: primer resultado con precio numérico
+    for r in shopping_results:
+        precio = _extraer_precio(r.get("extracted_price"))
+        if precio is None:
+            precio = _extraer_precio(r.get("price"))
+        if precio is not None:
+            return precio
+
+    return None
 
 
 def _extraer_precio(price_info) -> float | None:
