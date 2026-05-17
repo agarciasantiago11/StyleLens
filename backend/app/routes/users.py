@@ -66,7 +66,7 @@ def get_roles(
     return [r for r in all_roles if r.prioridad <= current_role.prioridad]
 
 
-@router.post("/")
+@router.post("/", deprecated=True)
 def create_user(
     body: CreateUserBody,
     db: Session = Depends(get_db),
@@ -246,7 +246,7 @@ def soft_delete_me(
     return {"message": "Cuenta eliminada correctamente"}
 
 
-@router.post("/{user_id}/request-reset-2fa")
+@router.post("/{user_id}/request-reset-2fa", deprecated=True)
 def request_reset_2fa(
     user_id: str,
     db: Session = Depends(get_db),
