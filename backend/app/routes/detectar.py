@@ -399,7 +399,7 @@ async def detectar_cajas(
     )
 
 
-@router.post("/detectar", response_model=DetectarResponse)
+@router.post("/detectar", response_model=DetectarResponse, deprecated=True)
 async def detectar_prendas(
     imagen: UploadFile = File(...),
     db: Session = Depends(get_db),

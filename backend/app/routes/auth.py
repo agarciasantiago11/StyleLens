@@ -275,7 +275,7 @@ def verify_otp(
     }
 
 
-@router.post("/request-access")
+@router.post("/request-access", deprecated=True)
 def request_access(body: AccessRequestBody, request: Request, db: Session = Depends(get_db)):
     _access_request_limiter.check(request)
 

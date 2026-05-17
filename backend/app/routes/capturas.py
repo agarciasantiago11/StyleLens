@@ -170,7 +170,7 @@ def resultados_deteccion(
     ]
 
 
-@router.get("/capturas/{captura_id}/resultados")
+@router.get("/capturas/{captura_id}/resultados", deprecated=True)
 def captura_con_resultados(
     captura_id: UUID,
     db: Session = Depends(get_db),
