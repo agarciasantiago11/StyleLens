@@ -1,11 +1,22 @@
+import logging
 import os
+import re
 from urllib.parse import urlparse
-from serpapi import GoogleSearch
+
 from dotenv import load_dotenv
+from serpapi import GoogleSearch
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 MAX_RESULTS = 5
+CANDIDATE_POOL = 10
+
+COUNTRY = "es"
+LANGUAGE = "es"
+
+SOFT_PRICE_CEILING_EUR = 80.0
 
 # Sitios que suelen devolver ruido para compra de prendas.
 BLOCKED_DOMAINS = {
@@ -24,36 +35,44 @@ BLOCKED_DOMAINS = {
     "wikipedia.org",
 }
 
-# Señales comunes de tienda online en url/title/source.
-SHOP_HINTS = {
-    "shop",
-    "store",
-    "tienda",
-    "outlet",
-    "fashion",
-    "clothing",
-    "ropa",
-    "product",
-    "producto",
-    "catalog",
-    "catalogo",
-    "zalando",
-    "asos",
-    "hm",
-    "zara",
-    "bershka",
-    "stradivarius",
-    "pullandbear",
-    "mango",
-    "uniqlo",
-    "nike",
-    "adidas",
+# Fast-fashion / consumo masivo → priorizamos fuerte (+60)
+FAST_FASHION_DOMAINS = {
+    # Inditex
+    "zara.com", "pullandbear.com", "bershka.com", "stradivarius.com",
+    "massimodutti.com", "oysho.com", "lefties.com",
+    # Fast-fashion internacional
+    "hm.com", "www2.hm.com", "shein.com", "primark.com", "mango.com",
+    "shop.mango.com", "asos.com", "uniqlo.com", "newyorker.com",
+    "boohoo.com", "prettylittlething.com", "missguided.com",
+    "kiabi.es", "c-and-a.com",
 }
+
+# Mid-market accesible (+25)
+MID_FASHION_DOMAINS = {
+    "zalando.es", "zalando.com", "elcorteingles.es", "decathlon.es",
+    "carrefour.es", "lidl.es", "amazon.es", "amazon.com",
+    "springfield.com", "cortefiel.com",
+}
+
+# Lujo → penalización fuerte (-80). No se bloquean para mantener fallback.
+LUXURY_DOMAINS = {
+    "gucci.com", "prada.com", "louisvuitton.com", "hermes.com", "chanel.com",
+    "dior.com", "balenciaga.com", "burberry.com", "fendi.com", "valentino.com",
+    "bottegaveneta.com", "saintlaurent.com", "celine.com", "loewe.com",
+    "loropiana.com", "ysl.com", "givenchy.com", "tomford.com",
+    "moncler.com", "stoneisland.com", "off---white.com", "moschino.com",
+    "armani.com", "versace.com", "dolcegabbana.com",
+    "farfetch.com", "mytheresa.com", "matchesfashion.com", "ssense.com",
+    "net-a-porter.com", "luisaviaroma.com",
+}
+
+_PRICE_REGEX = re.compile(r"(\d+[\.,]?\d*)")
 
 
 def buscar_por_imagen(imagen_url: str) -> list[dict]:
     """
-    Llama a SerpAPI con Google Lens y devuelve los primeros resultados visuales.
+    Llama a SerpAPI con Google Lens y devuelve los primeros resultados visuales,
+    rankeados para favorecer fast-fashion y opciones asequibles.
 
     Cada resultado incluye: nombre, tienda, precio, imagen_url, link.
     Devuelve lista vacía si no hay resultados o falla la llamada.
@@ -61,20 +80,25 @@ def buscar_por_imagen(imagen_url: str) -> list[dict]:
     params = {
         "engine": "google_lens",
         "url": imagen_url,
+        "country": COUNTRY,
+        "hl": LANGUAGE,
         "api_key": os.getenv("SERPAPI_KEY"),
     }
 
-    search = GoogleSearch(params)
-    datos = search.get_dict()
+    try:
+        datos = GoogleSearch(params).get_dict()
+    except Exception as exc:
+        logger.warning("SerpAPI Google Lens fallo: %s", exc)
+        return []
 
-    visual_matches = datos.get("visual_matches", []) or []
+    visual_matches = (datos.get("visual_matches") or [])[:CANDIDATE_POOL]
 
-    # 1) Primero: filtrar basura (redes sociales / dominios bloqueados)
-    # 2) Luego: priorizar candidatos con señales de ecommerce
+    # 1) Filtrar dominios bloqueados / sin link
+    # 2) Rankear por dominio (fast-fashion vs lujo) y por precio
     candidates = [match for match in visual_matches if _is_match_allowed(match)]
     ranked_candidates = sorted(candidates, key=_rank_match, reverse=True)
 
-    # Si el filtro es demasiado estricto y no hay nada, degradar al listado original
+    # Si el filtro es demasiado estricto, degradar al listado original
     source_matches = ranked_candidates if ranked_candidates else visual_matches
 
     resultados = []
@@ -105,62 +129,80 @@ def _extract_domain(link: str | None) -> str:
     return host
 
 
-def _domain_is_blocked(domain: str) -> bool:
+def _matches_domain_set(domain: str, dominios: set[str]) -> bool:
     if not domain:
         return False
-
-    return any(domain == blocked or domain.endswith(f".{blocked}") for blocked in BLOCKED_DOMAINS)
-
-
-def _get_match_text(match: dict) -> str:
-    title = str(match.get("title") or "")
-    source = str(match.get("source") or "")
-    link = str(match.get("link") or "")
-    return f"{title} {source} {link}".lower()
-
-
-def _has_shop_signal(match: dict) -> bool:
-    text = _get_match_text(match)
-    return any(hint in text for hint in SHOP_HINTS)
+    return any(domain == d or domain.endswith(f".{d}") for d in dominios)
 
 
 def _is_match_allowed(match: dict) -> bool:
-    domain = _extract_domain(match.get("link"))
-    if _domain_is_blocked(domain):
-        return False
-
-    # Descartar resultados sin enlace navegable
     if not match.get("link"):
         return False
-
+    if _matches_domain_set(_extract_domain(match.get("link")), BLOCKED_DOMAINS):
+        return False
     return True
 
 
 def _rank_match(match: dict) -> int:
     score = 0
+    domain = _extract_domain(match.get("link"))
 
-    # Preferir resultados con precio (más probable ecommerce real)
-    if _extraer_precio(match.get("price")) is not None:
-        score += 3
+    # Tier de dominio
+    if _matches_domain_set(domain, FAST_FASHION_DOMAINS):
+        score += 60
+    elif _matches_domain_set(domain, MID_FASHION_DOMAINS):
+        score += 25
+    elif _matches_domain_set(domain, LUXURY_DOMAINS):
+        score -= 80
 
-    # Priorizar señales de tienda en texto/URL
-    if _has_shop_signal(match):
-        score += 2
+    # Score por precio
+    precio = _extraer_precio(match.get("price"))
+    if precio is not None:
+        score += 5  # tener precio extraído es señal de ecommerce real
+        if precio <= 20:
+            score += 20
+        elif precio <= 50:
+            score += 12
+        elif precio <= SOFT_PRICE_CEILING_EUR:
+            score += 4
+        else:
+            score -= int(min(40, (precio - SOFT_PRICE_CEILING_EUR) / 5))
 
-    # Bonus por enlace con ruta de producto
+    # Bonus por patrón de URL de producto
     link = str(match.get("link") or "").lower()
-    if "/product" in link or "/products" in link or "/p/" in link:
-        score += 1
+    if "/product" in link or "/products" in link or "/p/" in link or "/dp/" in link:
+        score += 3
 
     return score
 
 
 def _extraer_precio(price_info) -> float | None:
-    """Extrae el valor numérico del campo price de SerpAPI."""
+    """
+    Extrae el valor numérico del precio. SerpAPI devuelve a veces un dict
+    {"extracted_value": 29.99, "value": "$29.99", "currency": "$"} y otras
+    un string suelto ("29,99 €") o un número directo.
+    """
+    if price_info is None:
+        return None
+
     if isinstance(price_info, dict):
-        valor = price_info.get("extracted_value") or price_info.get("value")
-        try:
-            return float(valor) if valor is not None else None
-        except (ValueError, TypeError):
-            return None
+        valor = price_info.get("extracted_value")
+        if valor is not None:
+            try:
+                return float(valor)
+            except (TypeError, ValueError):
+                return None
+        price_info = price_info.get("value")
+
+    if isinstance(price_info, (int, float)):
+        return float(price_info)
+
+    if isinstance(price_info, str):
+        match = _PRICE_REGEX.search(price_info.replace(",", "."))
+        if match:
+            try:
+                return float(match.group(1))
+            except ValueError:
+                return None
+
     return None
