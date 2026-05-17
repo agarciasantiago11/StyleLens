@@ -17,6 +17,21 @@ def _must_use_ssl() -> bool:
     return SMTP_USE_SSL or SMTP_PORT == 465
 
 
+def _smtp_targets() -> list[str]:
+    """Devuelve hostname + posibles IPv4 para sortear problemas de ruteo/IPv6."""
+    targets = [SMTP_HOST]
+    try:
+        infos = socket.getaddrinfo(SMTP_HOST, SMTP_PORT, socket.AF_INET, socket.SOCK_STREAM)
+        for info in infos:
+            ip = info[4][0]
+            if ip not in targets:
+                targets.append(ip)
+    except OSError:
+        # Si no se puede resolver IPv4, mantenemos al menos el hostname original.
+        pass
+    return targets
+
+
 def _send(
     to: str,
     subject: str,
@@ -49,18 +64,28 @@ def _send(
         msg = outer
 
     try:
-        if _must_use_ssl():
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
-                server.ehlo()
-                server.login(SMTP_USER, SMTP_PASSWORD)
-                server.sendmail(SMTP_USER, [to], msg.as_string())
-        else:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-                server.login(SMTP_USER, SMTP_PASSWORD)
-                server.sendmail(SMTP_USER, [to], msg.as_string())
+        last_error: Exception | None = None
+        for target in _smtp_targets():
+            try:
+                if _must_use_ssl():
+                    with smtplib.SMTP_SSL(target, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
+                        server.ehlo()
+                        server.login(SMTP_USER, SMTP_PASSWORD)
+                        server.sendmail(SMTP_USER, [to], msg.as_string())
+                else:
+                    with smtplib.SMTP(target, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
+                        server.ehlo()
+                        server.starttls()
+                        server.ehlo()
+                        server.login(SMTP_USER, SMTP_PASSWORD)
+                        server.sendmail(SMTP_USER, [to], msg.as_string())
+                return
+            except (socket.timeout, TimeoutError, OSError, smtplib.SMTPException) as e:
+                last_error = e
+
+        # Si llegamos aquí, fallaron todos los targets (host + IPv4s).
+        if last_error:
+            raise last_error
     except (socket.timeout, TimeoutError) as e:
         mode = "SSL" if _must_use_ssl() else "STARTTLS"
         raise RuntimeError(
