@@ -1,14 +1,20 @@
 import os
 import smtplib
+import socket
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from html import escape
 from typing import Iterable
 
-from app.config import ADMIN_EMAIL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER
+from app.config import ADMIN_EMAIL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_TIMEOUT, SMTP_USE_SSL, SMTP_USER
 
 _FROM_NAME = "Stylens"
+
+
+def _must_use_ssl() -> bool:
+    # Permite forzar por env y además soporta la convención típica de SMTP por puerto.
+    return SMTP_USE_SSL or SMTP_PORT == 465
 
 
 def _send(
@@ -43,14 +49,30 @@ def _send(
         msg = outer
 
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_USER, [to], msg.as_string())
+        if _must_use_ssl():
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
+                server.ehlo()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_USER, [to], msg.as_string())
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_USER, [to], msg.as_string())
+    except (socket.timeout, TimeoutError) as e:
+        mode = "SSL" if _must_use_ssl() else "STARTTLS"
+        raise RuntimeError(
+            f"Timeout SMTP conectando a {SMTP_HOST}:{SMTP_PORT} ({mode}). "
+            "Revisa host/puerto/modo TLS y reglas de red del proveedor."
+        ) from e
+    except OSError as e:
+        raise RuntimeError(
+            f"Error de red SMTP en {SMTP_HOST}:{SMTP_PORT}: {e}"
+        ) from e
     except smtplib.SMTPException as e:
-        raise RuntimeError(f"Error enviando email via SMTP: {e}")
+        raise RuntimeError(f"Error enviando email via SMTP: {e}") from e
 
 
 def send_otp_email(to_email: str, otp: str) -> None:
