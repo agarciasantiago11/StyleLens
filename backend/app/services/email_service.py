@@ -12,9 +12,11 @@ from typing import Iterable
 
 from app.config import (
     ADMIN_EMAIL,
+    EMAIL_TRANSPORT,
     RESEND_API_KEY,
     RESEND_FROM_EMAIL,
     SMTP_HOST,
+    SMTP_MAX_TARGETS,
     SMTP_PASSWORD,
     SMTP_PORT,
     SMTP_TIMEOUT,
@@ -42,7 +44,7 @@ def _smtp_targets() -> list[str]:
     except OSError:
         # Si no se puede resolver IPv4, mantenemos al menos el hostname original.
         pass
-    return targets
+    return targets[:SMTP_MAX_TARGETS]
 
 
 def _resend_enabled() -> bool:
@@ -102,7 +104,16 @@ def _send(
     text: str,
     attachments: Iterable[tuple[str, bytes, str | None]] | None = None,
 ) -> None:
+    if EMAIL_TRANSPORT == "resend":
+        if not _resend_enabled():
+            raise RuntimeError("EMAIL_TRANSPORT=resend requiere RESEND_API_KEY y RESEND_FROM_EMAIL")
+        _send_via_resend(to, subject, html, text)
+        return
+
     if not SMTP_USER or not SMTP_PASSWORD:
+        if _resend_enabled() and EMAIL_TRANSPORT == "auto":
+            _send_via_resend(to, subject, html, text)
+            return
         raise RuntimeError("SMTP_USER y SMTP_PASSWORD deben estar configurados en las variables de entorno")
 
     msg = MIMEMultipart("alternative")
