@@ -10,5 +10,9 @@ SMTP_TIMEOUT = int(os.getenv("SMTP_TIMEOUT", "20"))
 # Si no se define, se infiere por puerto (465 => SSL, resto => STARTTLS).
 SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "").strip().lower() in {"1", "true", "yes"}
 
+# Fallback opcional por API HTTPS (útil si el proveedor bloquea salida SMTP).
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "")
+
 # Email del administrador que recibe notificaciones
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")

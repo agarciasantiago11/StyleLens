@@ -1,13 +1,26 @@
 import os
 import smtplib
 import socket
+import json
+from urllib import request as urlrequest
+from urllib.error import URLError, HTTPError
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from html import escape
 from typing import Iterable
 
-from app.config import ADMIN_EMAIL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_TIMEOUT, SMTP_USE_SSL, SMTP_USER
+from app.config import (
+    ADMIN_EMAIL,
+    RESEND_API_KEY,
+    RESEND_FROM_EMAIL,
+    SMTP_HOST,
+    SMTP_PASSWORD,
+    SMTP_PORT,
+    SMTP_TIMEOUT,
+    SMTP_USE_SSL,
+    SMTP_USER,
+)
 
 _FROM_NAME = "Stylens"
 
@@ -30,6 +43,38 @@ def _smtp_targets() -> list[str]:
         # Si no se puede resolver IPv4, mantenemos al menos el hostname original.
         pass
     return targets
+
+
+def _resend_enabled() -> bool:
+    return bool(RESEND_API_KEY and RESEND_FROM_EMAIL)
+
+
+def _send_via_resend(to: str, subject: str, html: str, text: str) -> None:
+    payload = {
+        "from": RESEND_FROM_EMAIL,
+        "to": [to],
+        "subject": subject,
+        "html": html,
+        "text": text,
+    }
+    req = urlrequest.Request(
+        url="https://api.resend.com/emails",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlrequest.urlopen(req, timeout=SMTP_TIMEOUT) as resp:
+            # 2xx esperado; con HTTPError saltará al except.
+            _ = resp.read()
+    except HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace") if e.fp else ""
+        raise RuntimeError(f"Fallback Resend falló (HTTP {e.code}): {body}") from e
+    except URLError as e:
+        raise RuntimeError(f"Fallback Resend falló por red: {e}") from e
 
 
 def _send(
@@ -87,12 +132,18 @@ def _send(
         if last_error:
             raise last_error
     except (socket.timeout, TimeoutError) as e:
+        if _resend_enabled():
+            _send_via_resend(to, subject, html, text)
+            return
         mode = "SSL" if _must_use_ssl() else "STARTTLS"
         raise RuntimeError(
             f"Timeout SMTP conectando a {SMTP_HOST}:{SMTP_PORT} ({mode}). "
             "Revisa host/puerto/modo TLS y reglas de red del proveedor."
         ) from e
     except OSError as e:
+        if _resend_enabled():
+            _send_via_resend(to, subject, html, text)
+            return
         raise RuntimeError(
             f"Error de red SMTP en {SMTP_HOST}:{SMTP_PORT}: {e}"
         ) from e
