@@ -49,6 +49,19 @@ def _resend_enabled() -> bool:
     return bool(RESEND_API_KEY and RESEND_FROM_EMAIL)
 
 
+def _email_domain(value: str) -> str:
+    if "@" not in value:
+        return "invalid"
+    return value.split("@", 1)[1].strip().lower()
+
+
+def _key_hint(value: str) -> str:
+    # Solo mostramos prefijo para diagnóstico, sin exponer el secreto completo.
+    if not value:
+        return "missing"
+    return f"{value[:6]}..."
+
+
 def _send_via_resend(to: str, subject: str, html: str, text: str) -> None:
     payload = {
         "from": RESEND_FROM_EMAIL,
@@ -72,7 +85,11 @@ def _send_via_resend(to: str, subject: str, html: str, text: str) -> None:
             _ = resp.read()
     except HTTPError as e:
         body = e.read().decode("utf-8", errors="replace") if e.fp else ""
-        raise RuntimeError(f"Fallback Resend falló (HTTP {e.code}): {body}") from e
+        raise RuntimeError(
+            "Fallback Resend falló "
+            f"(HTTP {e.code}, from={RESEND_FROM_EMAIL}, from_domain={_email_domain(RESEND_FROM_EMAIL)}, "
+            f"to_domain={_email_domain(to)}, api_key={_key_hint(RESEND_API_KEY)}): {body}"
+        ) from e
     except URLError as e:
         raise RuntimeError(f"Fallback Resend falló por red: {e}") from e
 
