@@ -76,6 +76,7 @@ def _send_via_resend(to: str, subject: str, html: str, text: str) -> None:
         headers={
             "Authorization": f"Bearer {RESEND_API_KEY}",
             "Content-Type": "application/json",
+            "User-Agent": "stylens-backend/1.0",
         },
         method="POST",
     )
