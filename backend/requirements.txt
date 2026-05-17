@@ -15,4 +15,3 @@ google-search-results
 numpy
 bcrypt
 pytest
-sib-api-v3-sdk

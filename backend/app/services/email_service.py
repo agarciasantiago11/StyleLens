@@ -1,24 +1,14 @@
-import base64
 import os
+import smtplib
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from html import escape
 from typing import Iterable
 
-import sib_api_v3_sdk
-from sib_api_v3_sdk.rest import ApiException
+from app.config import ADMIN_EMAIL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER
 
-from app.config import ADMIN_EMAIL
-
-_FROM_EMAIL = "stylensgarcijuanjesus@gmail.com"
-_FROM_NAME = "StyleLens"
-
-
-def _get_api() -> sib_api_v3_sdk.TransactionalEmailsApi:
-    api_key = os.getenv("BREVO_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("BREVO_API_KEY no configurado en las variables de entorno")
-    configuration = sib_api_v3_sdk.Configuration()
-    configuration.api_key["api-key"] = api_key
-    return sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
+_FROM_NAME = "Stylens"
 
 
 def _send(
@@ -28,31 +18,39 @@ def _send(
     text: str,
     attachments: Iterable[tuple[str, bytes, str | None]] | None = None,
 ) -> None:
-    api = _get_api()
+    if not SMTP_USER or not SMTP_PASSWORD:
+        raise RuntimeError("SMTP_USER y SMTP_PASSWORD deben estar configurados en las variables de entorno")
 
-    brevo_attachments = None
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"{_FROM_NAME} <{SMTP_USER}>"
+    msg["To"] = to
+
+    msg.attach(MIMEText(text, "plain", "utf-8"))
+    msg.attach(MIMEText(html, "html", "utf-8"))
+
     if attachments:
-        brevo_attachments = [
-            {
-                "name": filename,
-                "content": base64.b64encode(data).decode("utf-8"),
-            }
-            for filename, data, _content_type in attachments
-            if data
-        ] or None
+        outer = MIMEMultipart("mixed")
+        outer["Subject"] = msg["Subject"]
+        outer["From"] = msg["From"]
+        outer["To"] = msg["To"]
+        outer.attach(msg)
+        for filename, data, content_type in attachments:
+            if data:
+                part = MIMEApplication(data)
+                part.add_header("Content-Disposition", "attachment", filename=filename)
+                outer.attach(part)
+        msg = outer
 
-    email = sib_api_v3_sdk.SendSmtpEmail(
-        to=[{"email": to}],
-        sender={"email": _FROM_EMAIL, "name": _FROM_NAME},
-        subject=subject,
-        html_content=html,
-        text_content=text,
-        attachment=brevo_attachments,
-    )
     try:
-        api.send_transac_email(email)
-    except ApiException as e:
-        raise RuntimeError(f"Brevo error: {e}")
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_USER, [to], msg.as_string())
+    except smtplib.SMTPException as e:
+        raise RuntimeError(f"Error enviando email via SMTP: {e}")
 
 
 def send_otp_email(to_email: str, otp: str) -> None:
