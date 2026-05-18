@@ -62,6 +62,27 @@ type FavoritoApi = {
   prenda_id?: string | number | null;
 };
 
+const YOLO_CLASS_LABELS: Record<string, string> = {
+  short_sleeved_shirt: "camiseta de manga corta",
+  long_sleeved_shirt: "camiseta de manga larga",
+  vest: "chaleco",
+  sling: "top de tirantes",
+  short_sleeved_outwear: "chaqueta o abrigo de manga corta",
+  long_sleeved_outwear: "chaqueta o abrigo de manga larga",
+  shorts: "pantalones cortos",
+  trousers: "pantalones",
+  skirt: "falda",
+  short_sleeved_dress: "vestido de manga corta",
+  long_sleeved_dress: "vestido de manga larga",
+  vest_dress: "vestido tipo chaleco",
+  sling_dress: "vestido de tirantes",
+};
+
+const translateYoloClass = (clase: string) => {
+  const normalized = clase.trim().toLowerCase();
+  return (YOLO_CLASS_LABELS[normalized] ?? normalized.replace(/_/g, " ")).toUpperCase();
+};
+
 const formatFecha = (fechaIso: string) => {
   const parsed = new Date(fechaIso);
   if (Number.isNaN(parsed.getTime())) return "Fecha no disponible";
@@ -334,7 +355,7 @@ export default function CapturasScreen() {
             <>
               <View style={[styles.selectedDetectionHeader, { backgroundColor: theme.surface }]}> 
                 <Text style={[styles.selectedDetectionTitle, { color: theme.textPrimary }]} numberOfLines={1}>
-                  {selectedDeteccion.clase || "Detección"}
+                  {selectedDeteccion.clase ? translateYoloClass(selectedDeteccion.clase) : "Detección"}
                 </Text>
                 <Text style={[styles.selectedDetectionMeta, { color: theme.textSecondary }]}>
                   Confianza: {((selectedDeteccion.confianza ?? 0) * 100).toFixed(1)}%
@@ -466,7 +487,7 @@ export default function CapturasScreen() {
                       )}
                       <View style={styles.detectionBody}>
                         <Text style={[styles.detectionClase, { color: theme.accent }]} numberOfLines={1}>
-                          {deteccion.clase}
+                          {translateYoloClass(deteccion.clase)}
                         </Text>
                         <View style={styles.confidenceWrap}>
                           <Text style={[styles.detectionMeta, { color: theme.textSecondary }]}>

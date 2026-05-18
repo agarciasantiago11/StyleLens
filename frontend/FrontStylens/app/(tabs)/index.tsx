@@ -127,6 +127,7 @@ export default function StylensScreen() {
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && viewportWidth >= 1024;
   const isAndroid = Platform.OS === "android";
+  const isNarrowScreen = viewportWidth < 600;
 
   const selectImageHeight = isDesktopWeb
     ? Math.min(740, Math.round(viewportHeight * 0.72))
@@ -774,12 +775,12 @@ export default function StylensScreen() {
 
         {screenState === "results" && (
           <>
-            <View style={styles.topRow}>
-              <View style={{ flex: 1 }}>
+            <View style={[styles.topRow, isNarrowScreen && styles.topRowMobile]}>
+              <View style={isNarrowScreen ? styles.topRowTitleMobile : { flex: 1 }}>
                 <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Productos encontrados</Text>
                 <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>{products.length} prendas similares detectadas</Text>
               </View>
-              <View style={styles.resultsActionsRow}>
+              <View style={[styles.resultsActionsRow, isNarrowScreen && styles.resultsActionsRowMobile]}>
                 <TouchableOpacity
                   style={[styles.secondaryButton, { borderColor: theme.border, backgroundColor: theme.surface }]}
                   onPress={handleBackToSelect}
@@ -983,10 +984,22 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 14,
   },
+  topRowMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 12,
+  },
+  topRowTitleMobile: {
+    width: "100%",
+  },
   resultsActionsRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  resultsActionsRowMobile: {
+    justifyContent: "flex-start",
+    flexWrap: "wrap",
   },
   sectionTitle: {
     fontSize: 22,
