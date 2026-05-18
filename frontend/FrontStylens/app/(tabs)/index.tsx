@@ -112,6 +112,12 @@ const translateYoloClass = (clase: string) => {
   return (YOLO_CLASS_LABELS[normalized] ?? normalized.replace(/_/g, " ")).toUpperCase();
 };
 
+const formatCategoria = (categoria?: string | null) => {
+  const trimmed = categoria?.trim();
+  if (!trimmed) return "Sin clasificar";
+  return trimmed.replace(/_/g, " ");
+};
+
 const mapBackendProducts = (items: BackendPrenda[] = []): Product[] => {
   return items.map((item, index) => ({
     id: item.id ?? index + 1,
@@ -119,7 +125,7 @@ const mapBackendProducts = (items: BackendPrenda[] = []): Product[] => {
     name: item.nombre?.trim() || "Producto sin nombre",
     price: formatPrice(item.precio),
     link: item.link ?? item.url ?? "",
-    category: item.categoria?.trim() || "Sin clasificar",
+    category: formatCategoria(item.categoria),
   }));
 };
 
@@ -665,15 +671,19 @@ export default function StylensScreen() {
 
         {screenState === "select" && (
           <>
-            <View style={styles.topRow}>
-              <View style={{ flex: 1 }}>
+            <View style={[styles.topRow, isNarrowScreen && styles.topRowMobile]}>
+              <View style={isNarrowScreen ? styles.topRowTitleMobile : { flex: 1 }}>
                 <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Selecciona una prenda</Text>
                 <Text style={[styles.resultsCount, { color: theme.textSecondary }]}>
                   Pulsa sobre el recuadro de la prenda que quieres buscar
                 </Text>
               </View>
               <TouchableOpacity
-                style={[styles.secondaryButton, { borderColor: theme.border, backgroundColor: theme.surface }]}
+                style={[
+                  styles.secondaryButton,
+                  { borderColor: theme.border, backgroundColor: theme.surface },
+                  isNarrowScreen && styles.secondaryButtonMobile,
+                ]}
                 onPress={clearImage}
               >
                 <Ionicons name="refresh" size={14} color={theme.textPrimary} />
@@ -1017,6 +1027,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  secondaryButtonMobile: {
+    alignSelf: "flex-start",
   },
   secondaryButtonText: {
     fontSize: 13,
